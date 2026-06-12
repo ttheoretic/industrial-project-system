@@ -81,8 +81,25 @@ def _extract(msg: email.message.Message) -> tuple[str, list[tuple[str, bytes]]]:
 def check_mailbox() -> dict:
     """Einmaliger Abruf: ungelesene Mails prüfen und Anfragen importieren."""
     result = {"checked": 0, "imported": [], "skipped": []}
-    with imaplib.IMAP4_SSL(config.IMAP_HOST, config.IMAP_PORT) as imap:
-        imap.login(config.IMAP_USER, config.IMAP_PASSWORD)
+    try:
+        imap = imaplib.IMAP4_SSL(config.IMAP_HOST, config.IMAP_PORT, timeout=20)
+    except (TimeoutError, OSError) as exc:
+        raise RuntimeError(
+            f"Keine Verbindung zu {config.IMAP_HOST}:{config.IMAP_PORT} ({exc}). "
+            "Mögliche Ursachen: IMAP_HOST falsch geschrieben, IMAP beim Anbieter "
+            "nicht aktiviert, oder das Netzwerk/die Firewall blockiert Port 993. "
+            "Test im Terminal: openssl s_client -connect HOST:993"
+        ) from exc
+    with imap:
+        try:
+            imap.login(config.IMAP_USER, config.IMAP_PASSWORD)
+        except imaplib.IMAP4.error as exc:
+            raise RuntimeError(
+                f"IMAP-Login für {config.IMAP_USER} fehlgeschlagen ({exc}). "
+                "Bei Gmail/Outlook ist ein App-Passwort nötig (nicht das normale "
+                "Passwort); bei GMX/Web.de muss IMAP in den Einstellungen "
+                "aktiviert werden."
+            ) from exc
         imap.select(config.IMAP_FOLDER)
         _, data = imap.search(None, "UNSEEN")
         for num in data[0].split():
