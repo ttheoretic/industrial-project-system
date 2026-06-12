@@ -5,6 +5,8 @@ Cost estimation (Step C) is deterministic and lives in costing.py — the model
 only supplies the inputs (quantities, materials, time estimates, complexity).
 """
 
+import os
+
 import anthropic
 
 from . import config
@@ -13,9 +15,18 @@ from .models import CostEstimate, InquiryAnalysis, OfferNarrative, RiskAnalysis
 _client: anthropic.Anthropic | None = None
 
 
+class MissingApiKeyError(RuntimeError):
+    pass
+
+
 def client() -> anthropic.Anthropic:
     global _client
     if _client is None:
+        if not (os.getenv("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN")):
+            raise MissingApiKeyError(
+                "ANTHROPIC_API_KEY is not set. Copy .env.example to .env, add your "
+                "API key from https://console.anthropic.com, and restart the server."
+            )
         _client = anthropic.Anthropic()
     return _client
 

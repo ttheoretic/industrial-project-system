@@ -20,6 +20,13 @@ from .models import (
 
 app = FastAPI(title="Industrial Quotation System", version="0.1.0")
 
+
+@app.exception_handler(ai.MissingApiKeyError)
+def missing_api_key_handler(request, exc: ai.MissingApiKeyError):
+    from fastapi.responses import JSONResponse
+
+    return JSONResponse(status_code=503, content={"detail": str(exc)})
+
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 # Status transitions allowed from each state
