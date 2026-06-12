@@ -7,8 +7,31 @@ from dotenv import load_dotenv
 load_dotenv()
 
 DB_PATH = os.getenv("QUOTE_DB_PATH", "quotes.db")
+UPLOAD_DIR = os.getenv("UPLOAD_DIR", "uploads")
 
 ANTHROPIC_MODEL = "claude-opus-4-8"
+
+# --- E-Mail-Eingang (IMAP-Polling). Aktiv, sobald IMAP_HOST gesetzt ist. ---
+IMAP_HOST = os.getenv("IMAP_HOST", "")
+IMAP_PORT = int(os.getenv("IMAP_PORT", "993"))
+IMAP_USER = os.getenv("IMAP_USER", "")
+IMAP_PASSWORD = os.getenv("IMAP_PASSWORD", "")
+IMAP_FOLDER = os.getenv("IMAP_FOLDER", "INBOX")
+EMAIL_POLL_INTERVAL_SECONDS = int(os.getenv("EMAIL_POLL_INTERVAL_SECONDS", "120"))
+
+# Anhänge, die an die KI weitergegeben werden können
+SUPPORTED_ATTACHMENT_TYPES = {
+    ".pdf": "application/pdf",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".txt": "text/plain",
+    ".csv": "text/plain",
+    ".md": "text/plain",
+}
+MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024  # 20 MB pro Datei
 
 # Pricing parameters (MVP simplified cost model)
 HOURLY_PRODUCTION_RATE_EUR = float(os.getenv("HOURLY_PRODUCTION_RATE_EUR", "95.0"))

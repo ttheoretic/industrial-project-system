@@ -93,9 +93,11 @@ def test_renderer_produces_complete_document():
     html = render_offer_html(7, narrative, analysis, cost, cost.recommended_price)
     assert "Offer for Mounting Brackets" in html
     assert "Mounting bracket" in html
-    assert "Assumptions" in html
+    assert "Annahmen" in html
     assert "Standard anodized finish" in html
-    assert f"{cost.recommended_price:,.2f}" in html
+    # German number formatting: 12,345.67 -> 12.345,67
+    german_price = f"{cost.recommended_price:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    assert german_price in html
     # HTML-escapes untrusted content
     analysis.parts[0].name = "<script>alert(1)</script>"
     cost2 = estimate_costs(analysis)

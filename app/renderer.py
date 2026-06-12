@@ -1,4 +1,4 @@
-"""Render the final commercial offer as a PDF-ready, print-styled HTML document."""
+"""Rendert das finale Angebot als druckfertiges (PDF-ready) HTML-Dokument."""
 
 import html
 from datetime import date
@@ -11,7 +11,7 @@ def _e(value) -> str:
 
 
 def _eur(value: float) -> str:
-    return f"€ {value:,.2f}"
+    return "€ " + f"{value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
 def render_offer_html(
@@ -40,15 +40,15 @@ def render_offer_html(
         for a in analysis.assumptions
     )
     if not assumption_items:
-        assumption_items = "<li>No assumptions — all parameters were specified by the customer.</li>"
+        assumption_items = "<li>Keine Annahmen — alle Parameter wurden vom Kunden vorgegeben.</li>"
 
-    customer = _e(analysis.customer_name or "Customer")
+    customer = _e(analysis.customer_name or "Kunde")
 
     return f"""<!DOCTYPE html>
-<html lang="en">
+<html lang="de">
 <head>
 <meta charset="utf-8">
-<title>Offer {offer_id} — {_e(narrative.title)}</title>
+<title>Angebot {offer_id} — {_e(narrative.title)}</title>
 <style>
   @page {{ size: A4; margin: 2cm; }}
   body {{ font-family: Georgia, 'Times New Roman', serif; color: #1a1a1a;
@@ -71,40 +71,41 @@ def render_offer_html(
 <header>
   <h1>{_e(narrative.title)}</h1>
   <div class="meta">
-    Offer No. {offer_id} &middot; Date: {date.today().isoformat()} &middot;
-    For: {customer}
+    Angebot Nr. {offer_id} &middot; Datum: {date.today().strftime("%d.%m.%Y")} &middot;
+    Für: {customer}
   </div>
 </header>
 
 <p>{_e(narrative.introduction)}</p>
 
-<h2>1. Scope of Work</h2>
+<h2>1. Leistungsumfang</h2>
 <ul>{scope_items}</ul>
 
-<h2>2. Pricing</h2>
+<h2>2. Preise</h2>
 <table>
   <thead>
-    <tr><th>Item</th><th>Material</th><th class="num">Qty</th>
-        <th class="num">Prod. time</th><th class="num">Subtotal</th></tr>
+    <tr><th>Position</th><th>Material</th><th class="num">Menge</th>
+        <th class="num">Fertigungszeit</th><th class="num">Zwischensumme</th></tr>
   </thead>
   <tbody>
     {pricing_rows}
-    <tr class="total"><td colspan="4">Total offer price (net, excl. VAT)</td>
+    <tr class="total"><td colspan="4">Gesamtpreis (netto, zzgl. USt.)</td>
         <td class="num">{_eur(final_price)}</td></tr>
   </tbody>
 </table>
 
-<h2>3. Delivery Timeline</h2>
+<h2>3. Liefertermin</h2>
 <p>{_e(narrative.delivery_timeline)}</p>
 
-<h2>4. Assumptions</h2>
-<p>This offer is based on the following assumptions. Deviations may affect price and
-delivery time:</p>
+<h2>4. Annahmen</h2>
+<p>Dieses Angebot basiert auf folgenden Annahmen. Abweichungen können Preis und
+Liefertermin beeinflussen:</p>
 <ul>{assumption_items}</ul>
 
-<h2>5. Terms &amp; Conditions</h2>
-<p class="terms">[Placeholder — insert your company's standard terms: payment terms,
-validity period, warranty, Incoterms, retention of title, applicable law.]</p>
+<h2>5. Bedingungen</h2>
+<p class="terms">[Platzhalter — hier die Standardbedingungen Ihres Unternehmens einfügen:
+Zahlungsbedingungen, Bindefrist, Gewährleistung, Incoterms, Eigentumsvorbehalt,
+anwendbares Recht.]</p>
 
 <p>{_e(narrative.closing)}</p>
 </body>

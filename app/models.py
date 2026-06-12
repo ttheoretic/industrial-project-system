@@ -138,9 +138,23 @@ class OfferNarrative(BaseModel):
 OfferStatus = Literal["draft", "reviewed", "sent", "accepted", "rejected"]
 
 
-class InquiryCreate(BaseModel):
-    text: str = Field(description="Raw inquiry: email body, RFQ text, free-text description")
-    customer_email: Optional[str] = None
+class EmailClassification(BaseModel):
+    """Decision whether an incoming email is a quotable customer inquiry/order."""
+
+    is_inquiry: bool = Field(
+        description="True if the email is a customer inquiry, RFQ, or order request "
+        "that should be quoted; false for newsletters, invoices, spam, internal mail, etc."
+    )
+    reasoning: str = Field(description="Short justification in German")
+    confidence: int = Field(description="Confidence 0-100")
+
+
+class AttachmentMeta(BaseModel):
+    filename: str
+    path: str
+    media_type: str
+    size_bytes: int
+    passed_to_ai: bool
 
 
 class PriceOverride(BaseModel):
@@ -154,8 +168,12 @@ class StatusUpdate(BaseModel):
 class OfferRecord(BaseModel):
     id: int
     status: OfferStatus
+    source: Literal["manual", "email"]
     raw_inquiry: str
     customer_email: Optional[str]
+    email_from: Optional[str]
+    email_subject: Optional[str]
+    attachments: list[AttachmentMeta]
     analysis: InquiryAnalysis
     costing: CostEstimate
     risks: RiskAnalysis

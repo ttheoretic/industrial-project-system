@@ -1,35 +1,33 @@
-"""FastAPI application: inquiry → structured understanding → pricing → review → offer.
-
-Run with:  uvicorn app.main:app --reload
+"""FastAPI-Anwendung: Anfrage → strukturiertes Verständnis → Kalkulation →
+Review → Angebot. Start mit:  uvicorn app.main:app --reload
 """
 
 from pathlib import Path
+from typing import Optional
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import ai, costing, database, renderer
+from . import ai, costing, database, email_intake, pipeline, renderer
 from .models import (
     CostEstimate,
     InquiryAnalysis,
-    InquiryCreate,
     PriceOverride,
     StatusUpdate,
 )
 
-app = FastAPI(title="Industrial Quotation System", version="0.1.0")
+app = FastAPI(title="Industrielles Angebotssystem", version="0.2.0")
 
 
 @app.exception_handler(ai.MissingApiKeyError)
 def missing_api_key_handler(request, exc: ai.MissingApiKeyError):
-    from fastapi.responses import JSONResponse
-
     return JSONResponse(status_code=503, content={"detail": str(exc)})
+
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
-# Status transitions allowed from each state
+# Erlaubte Statusübergänge
 ALLOWED_TRANSITIONS = {
     "draft": {"reviewed", "rejected"},
     "reviewed": {"sent", "rejected", "draft"},
@@ -42,47 +40,70 @@ ALLOWED_TRANSITIONS = {
 @app.on_event("startup")
 def startup() -> None:
     database.init_db()
+    email_intake.start_background_polling()
 
 
 def _get_or_404(offer_id: int) -> dict:
     offer = database.get_offer(offer_id)
     if offer is None:
-        raise HTTPException(status_code=404, detail="Offer not found")
+        raise HTTPException(status_code=404, detail="Angebot nicht gefunden")
     return offer
 
 
 # ---------------------------------------------------------------------------
-# Pipeline: inquiry intake → AI analysis → costing → draft offer
+# Pipeline: manuelle Erfassung (Text + Dateien) → KI-Analyse → Entwurf
 # ---------------------------------------------------------------------------
 
 
 @app.post("/api/inquiries")
-def create_inquiry(payload: InquiryCreate) -> dict:
-    """Process a raw customer inquiry: extract, assume, cost, assess risk; store as draft."""
-    if not payload.text.strip():
-        raise HTTPException(status_code=400, detail="Inquiry text is empty")
-
-    analysis = ai.analyze_inquiry(payload.text)
-    if not analysis.parts:
-        raise HTTPException(
-            status_code=422,
-            detail="No quotable parts or systems could be identified in the inquiry",
+async def create_inquiry(
+    text: str = Form(""),
+    customer_email: Optional[str] = Form(None),
+    files: list[UploadFile] = File(default=[]),
+) -> dict:
+    """Neue Anfrage verarbeiten: extrahieren, Annahmen, Kalkulation, Risiken; als Entwurf speichern."""
+    file_data = [(f.filename or "datei", await f.read()) for f in files]
+    if not text.strip() and not any(data for _, data in file_data):
+        raise HTTPException(status_code=400, detail="Anfragetext oder Dateien erforderlich")
+    try:
+        return pipeline.process_inquiry(
+            text=text.strip() or "(Kein Anschreiben — siehe angehängte Dateien.)",
+            customer_email=customer_email,
+            files=file_data,
         )
-    cost = costing.estimate_costs(analysis)
-    risks = ai.analyze_risks(analysis)
-
-    offer_id = database.create_offer(
-        raw_inquiry=payload.text,
-        customer_email=payload.customer_email,
-        analysis=analysis.model_dump(),
-        costing=cost.model_dump(),
-        risks=risks.model_dump(),
-    )
-    return database.get_offer(offer_id)
+    except pipeline.NoQuotablePartsError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
 
 
 # ---------------------------------------------------------------------------
-# Review layer: read, edit interpretation, override price
+# E-Mail-Eingang
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/email/status")
+def email_status() -> dict:
+    return {"configured": email_intake.is_configured(), **email_intake.state}
+
+
+@app.post("/api/email/check")
+def email_check_now() -> dict:
+    """Postfach sofort abrufen (zusätzlich zum automatischen Polling)."""
+    if not email_intake.is_configured():
+        raise HTTPException(
+            status_code=409,
+            detail="IMAP ist nicht konfiguriert. IMAP_HOST, IMAP_USER und "
+            "IMAP_PASSWORD in der .env setzen.",
+        )
+    try:
+        return email_intake.check_mailbox()
+    except ai.MissingApiKeyError:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"E-Mail-Abruf fehlgeschlagen: {exc}")
+
+
+# ---------------------------------------------------------------------------
+# Review: lesen, Interpretation bearbeiten, Preis übersteuern
 # ---------------------------------------------------------------------------
 
 
@@ -96,13 +117,25 @@ def get_offer(offer_id: int) -> dict:
     return _get_or_404(offer_id)
 
 
+@app.get("/api/offers/{offer_id}/attachments/{index}")
+def download_attachment(offer_id: int, index: int) -> FileResponse:
+    offer = _get_or_404(offer_id)
+    try:
+        att = offer["attachments"][index]
+    except IndexError:
+        raise HTTPException(status_code=404, detail="Anhang nicht gefunden")
+    if not Path(att["path"]).is_file():
+        raise HTTPException(status_code=410, detail="Datei nicht mehr vorhanden")
+    return FileResponse(att["path"], filename=att["filename"], media_type=att["media_type"])
+
+
 @app.put("/api/offers/{offer_id}/analysis")
 def update_analysis(offer_id: int, analysis: InquiryAnalysis) -> dict:
-    """Reviewer edits quantities, materials, time estimates, assumptions.
-    Costing is recomputed from the edited analysis; a price override is cleared."""
+    """Reviewer bearbeitet Mengen, Materialien, Zeitschätzungen, Annahmen.
+    Die Kalkulation wird neu berechnet; ein Preis-Override wird zurückgesetzt."""
     offer = _get_or_404(offer_id)
     if offer["status"] in ("sent", "accepted"):
-        raise HTTPException(status_code=409, detail="Offer already sent; cannot edit")
+        raise HTTPException(status_code=409, detail="Angebot bereits versendet; nicht editierbar")
     cost = costing.estimate_costs(analysis)
     database.update_offer(
         offer_id,
@@ -119,24 +152,26 @@ def update_analysis(offer_id: int, analysis: InquiryAnalysis) -> dict:
 def override_price(offer_id: int, payload: PriceOverride) -> dict:
     offer = _get_or_404(offer_id)
     if offer["status"] in ("sent", "accepted"):
-        raise HTTPException(status_code=409, detail="Offer already sent; cannot edit")
+        raise HTTPException(status_code=409, detail="Angebot bereits versendet; nicht editierbar")
     if payload.final_price <= 0:
-        raise HTTPException(status_code=400, detail="Price must be positive")
+        raise HTTPException(status_code=400, detail="Preis muss positiv sein")
     database.update_offer(offer_id, final_price=payload.final_price, offer_html=None)
     return database.get_offer(offer_id)
 
 
 # ---------------------------------------------------------------------------
-# Output actions: approve (generate final document), status tracking
+# Ausgabe: Freigabe (Dokument erzeugen), Statusverfolgung
 # ---------------------------------------------------------------------------
 
 
 @app.post("/api/offers/{offer_id}/approve")
 def approve_offer(offer_id: int) -> dict:
-    """Approve the reviewed offer: generate the final document, status → reviewed."""
+    """Geprüftes Angebot freigeben: finales Dokument erzeugen, Status → reviewed."""
     offer = _get_or_404(offer_id)
     if offer["status"] not in ("draft", "reviewed"):
-        raise HTTPException(status_code=409, detail=f"Cannot approve from '{offer['status']}'")
+        raise HTTPException(
+            status_code=409, detail=f"Freigabe aus Status '{offer['status']}' nicht möglich"
+        )
 
     analysis = InquiryAnalysis.model_validate(offer["analysis"])
     cost = CostEstimate.model_validate(offer["costing"])
@@ -158,10 +193,10 @@ def set_status(offer_id: int, payload: StatusUpdate) -> dict:
     if payload.status not in ALLOWED_TRANSITIONS[current]:
         raise HTTPException(
             status_code=409,
-            detail=f"Invalid transition: {current} → {payload.status}",
+            detail=f"Ungültiger Statuswechsel: {current} → {payload.status}",
         )
     if payload.status == "sent" and not offer["offer_html"]:
-        raise HTTPException(status_code=409, detail="Approve the offer before sending")
+        raise HTTPException(status_code=409, detail="Angebot vor dem Versand erst freigeben")
     database.update_offer(offer_id, status=payload.status)
     return database.get_offer(offer_id)
 
@@ -170,12 +205,12 @@ def set_status(offer_id: int, payload: StatusUpdate) -> dict:
 def get_document(offer_id: int) -> str:
     offer = _get_or_404(offer_id)
     if not offer["offer_html"]:
-        raise HTTPException(status_code=404, detail="Offer document not generated yet")
+        raise HTTPException(status_code=404, detail="Angebotsdokument noch nicht erzeugt")
     return offer["offer_html"]
 
 
 # ---------------------------------------------------------------------------
-# Review UI
+# Review-Oberfläche
 # ---------------------------------------------------------------------------
 
 

@@ -12,8 +12,12 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS offers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     status TEXT NOT NULL DEFAULT 'draft',
+    source TEXT NOT NULL DEFAULT 'manual',
     raw_inquiry TEXT NOT NULL,
     customer_email TEXT,
+    email_from TEXT,
+    email_subject TEXT,
+    attachments_json TEXT NOT NULL DEFAULT '[]',
     analysis_json TEXT NOT NULL,
     costing_json TEXT NOT NULL,
     risks_json TEXT NOT NULL,
@@ -23,6 +27,14 @@ CREATE TABLE IF NOT EXISTS offers (
     updated_at TEXT NOT NULL
 );
 """
+
+# Spalten, die per Migration zu bestehenden Datenbanken hinzugefügt werden
+_MIGRATIONS = [
+    ("source", "TEXT NOT NULL DEFAULT 'manual'"),
+    ("email_from", "TEXT"),
+    ("email_subject", "TEXT"),
+    ("attachments_json", "TEXT NOT NULL DEFAULT '[]'"),
+]
 
 
 def _now() -> str:
@@ -43,6 +55,10 @@ def get_conn():
 def init_db() -> None:
     with get_conn() as conn:
         conn.executescript(SCHEMA)
+        existing = {r[1] for r in conn.execute("PRAGMA table_info(offers)")}
+        for column, ddl in _MIGRATIONS:
+            if column not in existing:
+                conn.execute(f"ALTER TABLE offers ADD COLUMN {column} {ddl}")
 
 
 def create_offer(
@@ -51,17 +67,26 @@ def create_offer(
     analysis: dict,
     costing: dict,
     risks: dict,
+    source: str = "manual",
+    email_from: Optional[str] = None,
+    email_subject: Optional[str] = None,
+    attachments: Optional[list[dict]] = None,
 ) -> int:
     now = _now()
     with get_conn() as conn:
         cur = conn.execute(
             """INSERT INTO offers
-               (status, raw_inquiry, customer_email, analysis_json, costing_json,
-                risks_json, created_at, updated_at)
-               VALUES ('draft', ?, ?, ?, ?, ?, ?, ?)""",
+               (status, source, raw_inquiry, customer_email, email_from, email_subject,
+                attachments_json, analysis_json, costing_json, risks_json,
+                created_at, updated_at)
+               VALUES ('draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
+                source,
                 raw_inquiry,
                 customer_email,
+                email_from,
+                email_subject,
+                json.dumps(attachments or []),
                 json.dumps(analysis),
                 json.dumps(costing),
                 json.dumps(risks),
@@ -76,8 +101,12 @@ def _row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
     return {
         "id": row["id"],
         "status": row["status"],
+        "source": row["source"],
         "raw_inquiry": row["raw_inquiry"],
         "customer_email": row["customer_email"],
+        "email_from": row["email_from"],
+        "email_subject": row["email_subject"],
+        "attachments": json.loads(row["attachments_json"]),
         "analysis": json.loads(row["analysis_json"]),
         "costing": json.loads(row["costing_json"]),
         "risks": json.loads(row["risks_json"]),

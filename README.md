@@ -1,69 +1,97 @@
-# Industrial Quotation System (MVP)
+# Industrielles Angebotssystem (MVP)
 
-AI-powered quotation system for industrial manufacturing companies (CNC machining,
-special machine building, automation). Converts unstructured customer inquiries into
-structured, reviewable, sendable commercial offers.
+KI-gestütztes Angebotssystem für industrielle Fertigungsunternehmen (CNC-Zerspanung,
+Sondermaschinenbau, Automatisierung). Wandelt unstrukturierte Kundenanfragen in
+strukturierte, prüfbare und versandfertige Angebote um.
 
-**Pipeline:** inquiry → structured understanding → pricing → risk analysis → human review → offer → send
+**Pipeline:** Anfrage (E-Mail oder manuell, inkl. Dateien) → strukturiertes Verständnis →
+Kalkulation → Risikoanalyse → menschliche Prüfung → Angebot → Versand
 
-## How it works
+## Funktionsweise
 
-| Step | What happens | Where |
+| Schritt | Was passiert | Wo |
 |---|---|---|
-| A. Understanding | Claude extracts customer, parts, quantities, materials, requirements, deadlines into a structured model | `app/ai.py` (`analyze_inquiry`) |
-| B. Assumptions | Missing values are inferred, explicitly labeled as assumptions with per-field confidence scores (0–100%) | same call, `assumptions` field |
-| C. Cost estimation | **Deterministic** cost engine: material lookup table × estimated mass + machining hours × hourly rate × complexity factor + setup cost, then overhead % and target margin | `app/costing.py`, parameters in `app/config.py` |
-| D. Risk analysis | Claude flags missing specs, unclear tolerances, material uncertainty, production/deadline risks with severity 1–5 | `app/ai.py` (`analyze_risks`) |
-| E. Offer generation | Claude writes the narrative (scope of work, timeline); the system renders a PDF-ready HTML offer with pricing table, assumptions section, and terms placeholder | `app/ai.py` + `app/renderer.py` |
-| Review | Three-panel UI: original inquiry / AI interpretation (editable) / cost & pricing. Edit quantities, materials, time estimates; override price; approve or reject | `static/` |
-| Tracking | Offer status workflow: `draft → reviewed → sent → accepted/rejected` (CRM-light, SQLite) | `app/database.py`, `app/main.py` |
+| Eingang per E-Mail | IMAP-Postfach wird automatisch gepollt; die KI erkennt, ob eine Mail eine Auftrags-/Angebotsanfrage ist, und importiert sie inkl. Anhängen | `app/email_intake.py` |
+| Eingang manuell | Text einfügen und/oder Dateien hochladen (PDF, Bilder, TXT/CSV) | UI „+ Neue Anfrage" |
+| A. Verstehen | Claude extrahiert Kunde, Positionen, Mengen, Materialien, Anforderungen, Termine — auch aus PDF-Zeichnungen und Bildern | `app/ai.py` (`analyze_inquiry`) |
+| B. Annahmen | Fehlende Werte werden abgeleitet und explizit als Annahmen mit Konfidenz (0–100 %) gekennzeichnet | gleicher Aufruf, Feld `assumptions` |
+| C. Kalkulation | **Deterministisches** Kostenmodell: Materialpreistabelle × geschätzte Masse + Fertigungsstunden × Stundensatz × Komplexitätsfaktor + Rüstkosten, dann Gemeinkosten-% und Zielmarge | `app/costing.py`, Parameter in `app/config.py` |
+| D. Risikoanalyse | Claude markiert fehlende Spezifikationen, unklare Toleranzen, Material-, Fertigungs- und Terminrisiken mit Schwere 1–5 | `app/ai.py` (`analyze_risks`) |
+| E. Angebotserstellung | Claude schreibt die Texte (Leistungsumfang, Liefertermin); das System rendert ein druckfertiges HTML-Angebot mit Preistabelle, Annahmen und AGB-Platzhalter | `app/ai.py` + `app/renderer.py` |
+| Prüfung | Drei-Panel-UI: Original-Anfrage / editierbare KI-Interpretation / Kalkulation & Preis. Mengen, Material, Zeiten anpassen; Preis übersteuern; freigeben oder ablehnen | `static/` |
+| Verfolgung | Status-Workflow: `Entwurf → Geprüft → Versendet → Angenommen/Abgelehnt` (CRM light, SQLite) | `app/database.py`, `app/main.py` |
 
-The AI only *interprets* (quantities, materials, time estimates, complexity);
-pricing itself is computed in code so it is auditable and reproducible.
+Die KI *interpretiert* nur (Mengen, Materialien, Zeitschätzungen, Komplexität);
+die Preisberechnung selbst läuft im Code — nachvollziehbar und reproduzierbar.
 
-## Setup
+## Einrichtung
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env   # add your ANTHROPIC_API_KEY
+cp .env.example .env   # ANTHROPIC_API_KEY eintragen
 uvicorn app.main:app --reload
 ```
 
-Open http://localhost:8000 — paste a customer inquiry via **+ New Inquiry**.
+http://localhost:8000 öffnen — Anfrage über **+ Neue Anfrage** einfügen oder hochladen.
 
-API docs: http://localhost:8000/docs
+API-Dokumentation: http://localhost:8000/docs
 
-## API overview
+## Automatischer E-Mail-Eingang
 
-| Method & path | Purpose |
+In der `.env` das Postfach konfigurieren — danach werden ungelesene Mails alle
+2 Minuten geprüft (Intervall einstellbar):
+
+```
+IMAP_HOST=imap.dein-anbieter.de
+IMAP_USER=anfragen@deine-firma.de
+IMAP_PASSWORD=...
+```
+
+- Die KI klassifiziert jede neue Mail: Anfrage/RFQ/Auftrag → wird automatisch
+  inkl. Anhängen importiert; Newsletter, Rechnungen, Spam → übersprungen.
+- Über den Button **„E-Mails abrufen"** in der UI lässt sich der Abruf sofort auslösen.
+- Bei Gmail/Outlook ist ein App-Passwort nötig (IMAP aktivieren).
+
+## Dateianhänge
+
+PDF, PNG/JPG/GIF/WebP und TXT/CSV/MD werden direkt von der KI mitgelesen
+(z. B. Zeichnungen, Stücklisten). Andere Formate (z. B. STEP) werden gespeichert
+und im Review verlinkt, aber nicht analysiert. Max. 20 MB pro Datei.
+
+## API-Übersicht
+
+| Methode & Pfad | Zweck |
 |---|---|
-| `POST /api/inquiries` | Process raw inquiry → AI analysis + costing + risks → draft offer |
-| `GET /api/offers` / `GET /api/offers/{id}` | List / read offers |
-| `PUT /api/offers/{id}/analysis` | Save reviewer edits; costing is recomputed |
-| `POST /api/offers/{id}/price` | Override the final price |
-| `POST /api/offers/{id}/approve` | Generate final offer document, status → `reviewed` |
-| `POST /api/offers/{id}/status` | Track status: `sent`, `accepted`, `rejected` |
-| `GET /api/offers/{id}/document` | The PDF-ready HTML offer (print to PDF from the browser) |
+| `POST /api/inquiries` (multipart) | Anfrage verarbeiten: `text`, `customer_email`, `files[]` → Entwurf |
+| `POST /api/email/check` | Postfach sofort abrufen |
+| `GET /api/email/status` | Status des E-Mail-Eingangs |
+| `GET /api/offers` / `GET /api/offers/{id}` | Angebote auflisten / lesen |
+| `GET /api/offers/{id}/attachments/{n}` | Anhang herunterladen |
+| `PUT /api/offers/{id}/analysis` | Prüfer-Änderungen speichern; Kalkulation wird neu berechnet |
+| `POST /api/offers/{id}/price` | Finalen Preis übersteuern |
+| `POST /api/offers/{id}/approve` | Angebotsdokument erzeugen, Status → `Geprüft` |
+| `POST /api/offers/{id}/status` | Status setzen: `sent`, `accepted`, `rejected` |
+| `GET /api/offers/{id}/document` | Druckfertiges HTML-Angebot (im Browser „Als PDF drucken") |
 
-## Tuning the cost model
+## Kostenmodell anpassen
 
-Edit `app/config.py` (or set env vars): hourly rate, overhead %, target margin,
-material €/kg table, complexity factors, setup cost.
+`app/config.py` (oder Umgebungsvariablen): Stundensatz, Gemeinkosten-%, Zielmarge,
+Materialpreistabelle (€/kg), Komplexitätsfaktoren, Rüstkosten.
 
 ## Tests
 
-The deterministic core (cost engine, material lookup, document renderer) is tested
-without any API key:
+Der deterministische Kern (Kostenmodell, Material-Lookup, Dokument-Renderer,
+Datei-/E-Mail-Parsing) ist ohne API-Key testbar:
 
 ```bash
 pip install pytest
 pytest
 ```
 
-## MVP constraints (by design)
+## MVP-Grenzen (bewusst)
 
-No ERP, no CAD processing, no scheduling, no integrations. Attachments are ignored
-unless pasted as text. Future extensions (CRM, project management, supplier
-integration, drawing analysis, follow-up automation, KPI analytics) build on the
-stored offer records.
+Kein ERP, keine CAD-Verarbeitung (STEP-Dateien werden gespeichert, nicht analysiert),
+keine Produktionsplanung, kein automatischer Mailversand. Spätere Ausbaustufen
+(CRM, Projektmanagement, Lieferantenanbindung, Zeichnungsanalyse, automatische
+Nachfassmails, KPI-Auswertung) bauen auf den gespeicherten Angebotsdaten auf.

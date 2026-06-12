@@ -87,6 +87,7 @@ dl#cost-summary .big { font-weight: 700; font-size: 1.05rem; color: #1a3a5c; }
   font-size: .72rem; font-weight: 600; text-transform: uppercase;
   background: #e2e7ec; color: #4a5663;
 }
+.badge.source { background: #ece4f5; color: #5b3d8a; }
 .badge.draft { background: #e2e7ec; }
 .badge.reviewed { background: #d8eafd; color: #1a5c9e; }
 .badge.sent { background: #fdf1d3; color: #9a6700; }
