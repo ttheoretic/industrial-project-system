@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Industrial Quotation System</title>
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<header class="topbar">
+  <h1>Industrial Quotation System</h1>
+  <button id="btn-new">+ New Inquiry</button>
+</header>
+
+<main>
+  <aside id="offer-list" class="sidebar">
+    <h2>Offers</h2>
+    <ul id="offers"></ul>
+  </aside>
+
+  <section id="workspace" class="hidden">
+    <div class="workspace-head">
+      <div>
+        <span id="ws-title"></span>
+        <span id="ws-status" class="badge"></span>
+      </div>
+      <div class="actions">
+        <button id="btn-approve" class="primary">Approve &amp; Generate Offer</button>
+        <button id="btn-document">View Document</button>
+        <button id="btn-send">Mark Sent</button>
+        <button id="btn-accept">Accepted</button>
+        <button id="btn-reject" class="danger">Reject</button>
+      </div>
+    </div>
+
+    <div class="panels">
+      <!-- LEFT: original inquiry -->
+      <div class="panel">
+        <h3>Original Inquiry</h3>
+        <pre id="raw-inquiry"></pre>
+      </div>
+
+      <!-- CENTER: AI interpretation -->
+      <div class="panel">
+        <h3>AI Interpretation
+          <span class="hint">edit values, then Save</span>
+        </h3>
+        <div id="customer-block"></div>
+        <h4>Parts</h4>
+        <div id="parts"></div>
+        <h4>Assumptions</h4>
+        <ul id="assumptions"></ul>
+        <h4>Missing Information</h4>
+        <ul id="missing"></ul>
+        <h4>Risks <span id="risk-score" class="badge"></span></h4>
+        <p id="risk-summary" class="muted"></p>
+        <ul id="risks"></ul>
+        <button id="btn-save" class="primary">Save Edits &amp; Recalculate</button>
+      </div>
+
+      <!-- RIGHT: cost breakdown & pricing -->
+      <div class="panel">
+        <h3>Cost &amp; Pricing</h3>
+        <table id="cost-table">
+          <thead>
+            <tr><th>Part</th><th>Qty</th><th>Material</th><th>Labor</th><th>Subtotal</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        <dl id="cost-summary"></dl>
+        <h4>Final Price</h4>
+        <div class="price-row">
+          <input id="final-price" type="number" step="0.01" min="0">
+          <button id="btn-price">Override Price</button>
+        </div>
+        <h4>Confidence</h4>
+        <div class="confidence-bar"><div id="confidence-fill"></div></div>
+        <span id="confidence-label" class="muted"></span>
+      </div>
+    </div>
+  </section>
+
+  <section id="empty-state">
+    <p>Select an offer on the left, or paste a new customer inquiry to start.</p>
+  </section>
+</main>
+
+<!-- New inquiry dialog -->
+<dialog id="dlg-new">
+  <h2>New Customer Inquiry</h2>
+  <p class="muted">Paste an email, RFQ text, or free-text description.</p>
+  <input id="new-email" type="email" placeholder="Customer email (optional)">
+  <textarea id="new-text" rows="14" placeholder="Paste the inquiry here…"></textarea>
+  <div class="actions">
+    <button id="btn-analyze" class="primary">Analyze with AI</button>
+    <button id="btn-cancel">Cancel</button>
+  </div>
+  <p id="new-status" class="muted"></p>
+</dialog>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
