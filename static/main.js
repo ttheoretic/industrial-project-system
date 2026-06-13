@@ -211,9 +211,12 @@ async function renderOfferReview(id) {
   $("#doc").onclick = () => window.open(`/api/offers/${id}/document`, "_blank");
   $("#approve").onclick = (e) => busy(e.target, async () => {
     await api(`/api/offers/${id}/approve`, { method: "POST" }); setView("offers", id); });
-  $("#stage").onchange = (e) => busy(e.target, async () => {
-    await api(`/api/offers/${id}/pipeline`, jsonOpts("POST", { stage: e.target.value }));
-    setView("offers", id); });
+  $("#stage").onchange = (e) => {
+    const stage = e.target.value;  // vor busy() lesen — busy darf Selects nicht anfassen
+    busy(e.target, async () => {
+      await api(`/api/offers/${id}/pipeline`, jsonOpts("POST", { stage }));
+      setView("offers", id); });
+  };
   $("#save").onclick = (e) => busy(e.target, async () => {
     const ana = structuredClone(a);
     document.querySelectorAll("#parts [data-f]").forEach((el) => {
@@ -436,8 +439,11 @@ async function renderProject(id) {
       </div>
     </div>`;
   $("#back").onclick = () => setView("projects");
-  $("#status").onchange = (e) => busy(e.target, async () => {
-    await api(`/api/projects/${id}`, jsonOpts("PUT", { status: e.target.value })); setView("projects", id); });
+  $("#status").onchange = (e) => {
+    const status = e.target.value;
+    busy(e.target, async () => {
+      await api(`/api/projects/${id}`, jsonOpts("PUT", { status })); setView("projects", id); });
+  };
   $("#add-task").onclick = (e) => busy(e.target, async () => {
     const title = $("#t-title").value.trim(); if (!title) return;
     await api(`/api/projects/${id}/tasks`, jsonOpts("POST", { title, planned_hours: Number($("#t-hours").value) || 0 }));
@@ -577,8 +583,12 @@ function renderMsg(m) {
 /* ---------------- Helpers & Neue-Anfrage-Dialog ---------------- */
 
 async function busy(btn, fn) {
-  const old = btn.textContent; btn.disabled = true; btn.textContent = "…";
-  try { await fn(); } catch (e) { alert(e.message); btn.disabled = false; btn.textContent = old; }
+  // Bei <select>/<input> NIE textContent ändern — das würde Optionen/Wert zerstören.
+  const isButton = btn.tagName === "BUTTON";
+  const old = isButton ? btn.textContent : null;
+  btn.disabled = true;
+  if (isButton) btn.textContent = "…";
+  try { await fn(); } catch (e) { alert(e.message); btn.disabled = false; if (isButton) btn.textContent = old; }
 }
 
 $("#btn-new").onclick = () => $("#dlg-new").showModal();
