@@ -10,7 +10,8 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -52,6 +53,20 @@ app = FastAPI(title="Fertigungs-Betriebssystem", version="0.3.0")
 @app.exception_handler(ai.MissingApiKeyError)
 def missing_api_key_handler(request, exc: ai.MissingApiKeyError):
     return JSONResponse(status_code=503, content={"detail": str(exc)})
+
+
+@app.exception_handler(RequestValidationError)
+def validation_handler(request: Request, exc: RequestValidationError):
+    """Verständliche statt kryptischer 422-Meldung (häufig bei veraltetem
+    Frontend-Cache, das einen ungültigen Wert sendet)."""
+    problems = "; ".join(
+        f"{'.'.join(str(p) for p in e['loc'][1:])}: {e['msg']}" for e in exc.errors()
+    )
+    return JSONResponse(
+        status_code=422,
+        content={"detail": f"Ungültige Anfrage ({problems}). Tipp: Seite mit "
+                 "Strg+Shift+R neu laden, falls eine alte Version im Cache steckt."},
+    )
 
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
