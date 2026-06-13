@@ -100,6 +100,12 @@ views.settings = async () => {
   const s = await api("/api/settings");
   const prices = await api("/api/material-prices");
   const c = s.company, pr = s.pricing, co = s.commercial, cx = pr.complexity;
+  const aiModel = (s.ai && s.ai.model) || "claude-haiku-4-5";
+  const AI_MODELS = [
+    ["claude-haiku-4-5", "Haiku 4.5 — günstigste Option (empfohlen)"],
+    ["claude-sonnet-4-6", "Sonnet 4.6 — ausgewogen, mittlere Kosten"],
+    ["claude-opus-4-8", "Opus 4.8 — höchste Qualität, teuer"],
+  ];
   main.innerHTML = `
     <h2 class="view-title">Einstellungen — Stammdaten</h2>
     <div class="ai-note">Diese Werte sind je Unternehmen unterschiedlich. Sie fließen in
@@ -145,6 +151,14 @@ views.settings = async () => {
       <label class="field" style="margin-top:.5rem">AGB-/Bedingungstext (im Angebot)
         <textarea id="co-terms" rows="3">${esc(co.terms_text)}</textarea></label>
     </div>
+    <div class="card">
+      <h3>KI-Modell (Kosten)</h3>
+      <p class="muted">Bestimmt Qualität und Kosten der KI-Funktionen (Analyse, Risiko,
+      Angebotstext, Copilot). Günstiger = deutlich weniger Verbrauch.</p>
+      <label class="field" style="max-width:420px">Modell
+        <select id="ai-model">${AI_MODELS.map(([k, v]) =>
+          `<option value="${k}" ${k === aiModel ? "selected" : ""}>${v}</option>`).join("")}</select></label>
+    </div>
     <div class="actions" style="margin-bottom:1rem"><button id="save-settings" class="primary">Stammdaten speichern</button>
       <span id="save-msg" class="muted"></span></div>
 
@@ -185,6 +199,7 @@ views.settings = async () => {
         payment_terms: $("#co-pay").value, validity_days: Number($("#co-valid").value),
         terms_text: $("#co-terms").value,
       },
+      ai: { model: $("#ai-model").value },
     };
     if (logoDataUrl) patch.company.logo_data_url = logoDataUrl;
     await api("/api/settings", jsonOpts("PUT", patch));

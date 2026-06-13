@@ -9,7 +9,7 @@ Copilot das ausdrücklich — er erfindet nichts.
 
 import json
 
-from . import ai, database, services
+from . import ai, database, services, settings_store
 
 COPILOT_SYSTEM = """Du bist der Copilot eines KI-gestützten Betriebssystems für \
 Fertigungsunternehmen. Beantworte Fragen ausschließlich anhand der Daten, die dir \
@@ -144,8 +144,8 @@ def ask(question: str) -> dict:
 
     for _ in range(6):  # begrenzte Werkzeug-Schleife
         response = client.messages.create(
-            model=ai.config.ANTHROPIC_MODEL,
-            max_tokens=4000,
+            model=settings_store.ai_model(),
+            max_tokens=3000,
             system=COPILOT_SYSTEM,
             tools=TOOLS,
             messages=messages,

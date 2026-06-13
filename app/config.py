@@ -9,7 +9,11 @@ load_dotenv()
 DB_PATH = os.getenv("QUOTE_DB_PATH", "quotes.db")
 UPLOAD_DIR = os.getenv("UPLOAD_DIR", "uploads")
 
-ANTHROPIC_MODEL = "claude-opus-4-8"
+# KI-Modelle (Kosten!). Standard bewusst günstig (Haiku). In den Einstellungen
+# oder per .env überschreibbar. Der schnelle/günstige Klassifizierer für den
+# E-Mail-Eingang nutzt immer das Fast-Modell.
+ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5")
+ANTHROPIC_FAST_MODEL = os.getenv("ANTHROPIC_FAST_MODEL", "claude-haiku-4-5")
 
 # --- E-Mail-Eingang (IMAP-Polling). Aktiv, sobald IMAP_HOST gesetzt ist. ---
 IMAP_HOST = os.getenv("IMAP_HOST", "")

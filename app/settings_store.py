@@ -48,6 +48,10 @@ DEFAULTS: dict = {
             "(EXW). Eigentumsvorbehalt bis zur vollständigen Bezahlung."
         ),
     },
+    "ai": {
+        # Modell für Analyse/Risiko/Angebotstext/Copilot. Günstig = Haiku.
+        "model": config.ANTHROPIC_MODEL,
+    },
 }
 
 
@@ -89,6 +93,14 @@ def update_settings(patch: dict) -> dict:
 
 def pricing() -> dict:
     return get_settings()["pricing"]
+
+
+def ai_model() -> str:
+    """Konfiguriertes KI-Modell (Einstellungen), Fallback auf config."""
+    try:
+        return get_settings()["ai"]["model"] or config.ANTHROPIC_MODEL
+    except (KeyError, TypeError):
+        return config.ANTHROPIC_MODEL
 
 
 def material_rate(material: str) -> float:

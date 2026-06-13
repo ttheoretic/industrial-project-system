@@ -9,7 +9,7 @@ ein Mensch muss jeden Entwurf freigeben.
 from datetime import datetime, timezone
 from typing import Optional
 
-from . import ai, database, services
+from . import ai, database, services, settings_store
 
 NO_REPLY_DAYS = 7
 EXPIRY_WARN_DAYS = 5
@@ -92,8 +92,8 @@ def draft_followup(offer_id: int) -> dict:
         + (f"\nGültig bis: {offer['valid_until']}" if offer["valid_until"] else "")
     )
     response = ai.client().messages.create(
-        model=ai.config.ANTHROPIC_MODEL,
-        max_tokens=1500,
+        model=settings_store.ai_model(),
+        max_tokens=1200,
         system=FOLLOWUP_SYSTEM,
         messages=[{"role": "user", "content": f"Fakten zum Angebot:\n{facts}"}],
     )

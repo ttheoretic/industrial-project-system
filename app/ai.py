@@ -12,7 +12,7 @@ import os
 
 import anthropic
 
-from . import config
+from . import config, settings_store
 from .models import (
     CostEstimate,
     EmailClassification,
@@ -140,9 +140,8 @@ def analyze_inquiry(raw_text: str, attachments: list[dict] | None = None) -> Inq
     content: list[dict] = [{"type": "text", "text": f"<anfrage>\n{raw_text}\n</anfrage>"}]
     content += _attachment_blocks(attachments or [])
     response = client().messages.parse(
-        model=config.ANTHROPIC_MODEL,
-        max_tokens=16000,
-        thinking={"type": "adaptive"},
+        model=settings_store.ai_model(),
+        max_tokens=8000,
         system=EXTRACTION_SYSTEM,
         messages=[{"role": "user", "content": content}],
         output_format=InquiryAnalysis,
@@ -153,8 +152,8 @@ def analyze_inquiry(raw_text: str, attachments: list[dict] | None = None) -> Inq
 def classify_email(subject: str, sender: str, body: str) -> EmailClassification:
     """Decide whether an incoming email is a quotable inquiry/order."""
     response = client().messages.parse(
-        model=config.ANTHROPIC_MODEL,
-        max_tokens=2000,
+        model=config.ANTHROPIC_FAST_MODEL,
+        max_tokens=1000,
         system=CLASSIFIER_SYSTEM,
         messages=[
             {
@@ -170,9 +169,8 @@ def classify_email(subject: str, sender: str, body: str) -> EmailClassification:
 def analyze_risks(analysis: InquiryAnalysis) -> RiskAnalysis:
     """Step D: risk list with severity scores."""
     response = client().messages.parse(
-        model=config.ANTHROPIC_MODEL,
-        max_tokens=16000,
-        thinking={"type": "adaptive"},
+        model=settings_store.ai_model(),
+        max_tokens=6000,
         system=RISK_SYSTEM,
         messages=[
             {
@@ -198,9 +196,8 @@ def generate_offer_narrative(
         + f"\n\nFinaler Angebotspreis (diese Zahl verwenden): EUR {final_price:,.2f}"
     )
     response = client().messages.parse(
-        model=config.ANTHROPIC_MODEL,
-        max_tokens=16000,
-        thinking={"type": "adaptive"},
+        model=settings_store.ai_model(),
+        max_tokens=6000,
         system=OFFER_SYSTEM,
         messages=[{"role": "user", "content": context}],
         output_format=OfferNarrative,
