@@ -3,97 +3,27 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Angebotssystem</title>
+<title>Fertigungs-Betriebssystem</title>
 <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
 <header class="topbar">
-  <h1>Industrielles Angebotssystem</h1>
-  <div class="actions">
-    <button id="btn-mail" class="hidden">📧 E-Mails abrufen</button>
-    <button id="btn-new">+ Neue Anfrage</button>
-  </div>
+  <h1>⚙ Fertigungs-OS</h1>
+  <nav id="nav">
+    <button data-view="dashboard" class="active">Dashboard</button>
+    <button data-view="offers">Angebote</button>
+    <button data-view="pipeline">Pipeline</button>
+    <button data-view="followups">Follow-up</button>
+    <button data-view="crm">CRM</button>
+    <button data-view="projects">Projekte</button>
+    <button data-view="production">Produktion</button>
+    <button data-view="documents">Dokumente</button>
+    <button data-view="copilot">Copilot</button>
+  </nav>
+  <button id="btn-new" class="primary">+ Neue Anfrage</button>
 </header>
 
-<main>
-  <aside id="offer-list" class="sidebar">
-    <h2>Angebote</h2>
-    <ul id="offers"></ul>
-    <p id="mail-state" class="muted"></p>
-  </aside>
-
-  <section id="workspace" class="hidden">
-    <div class="workspace-head">
-      <div>
-        <span id="ws-title"></span>
-        <span id="ws-status" class="badge"></span>
-        <span id="ws-source" class="badge source"></span>
-      </div>
-      <div class="actions">
-        <button id="btn-approve" class="primary">Freigeben &amp; Angebot erzeugen</button>
-        <button id="btn-document">Dokument anzeigen</button>
-        <button id="btn-send">Als versendet markieren</button>
-        <button id="btn-accept">Angenommen</button>
-        <button id="btn-reject" class="danger">Ablehnen</button>
-      </div>
-    </div>
-
-    <div class="panels">
-      <!-- LINKS: Original-Anfrage -->
-      <div class="panel">
-        <h3>Original-Anfrage</h3>
-        <div id="email-meta" class="muted"></div>
-        <pre id="raw-inquiry"></pre>
-        <div id="attachments-block" class="hidden">
-          <h4>Anhänge</h4>
-          <ul id="attachments"></ul>
-        </div>
-      </div>
-
-      <!-- MITTE: KI-Interpretation -->
-      <div class="panel">
-        <h3>KI-Interpretation
-          <span class="hint">Werte anpassen, dann Speichern</span>
-        </h3>
-        <div id="customer-block"></div>
-        <h4>Positionen</h4>
-        <div id="parts"></div>
-        <h4>Annahmen</h4>
-        <ul id="assumptions"></ul>
-        <h4>Fehlende Informationen</h4>
-        <ul id="missing"></ul>
-        <h4>Risiken <span id="risk-score" class="badge"></span></h4>
-        <p id="risk-summary" class="muted"></p>
-        <ul id="risks"></ul>
-        <button id="btn-save" class="primary">Änderungen speichern &amp; neu kalkulieren</button>
-      </div>
-
-      <!-- RECHTS: Kalkulation & Preis -->
-      <div class="panel">
-        <h3>Kalkulation &amp; Preis</h3>
-        <table id="cost-table">
-          <thead>
-            <tr><th>Position</th><th>Menge</th><th>Material</th><th>Fertigung</th><th>Summe</th></tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-        <dl id="cost-summary"></dl>
-        <h4>Finaler Preis</h4>
-        <div class="price-row">
-          <input id="final-price" type="number" step="0.01" min="0">
-          <button id="btn-price">Preis übersteuern</button>
-        </div>
-        <h4>Konfidenz</h4>
-        <div class="confidence-bar"><div id="confidence-fill"></div></div>
-        <span id="confidence-label" class="muted"></span>
-      </div>
-    </div>
-  </section>
-
-  <section id="empty-state">
-    <p>Links ein Angebot auswählen oder eine neue Kundenanfrage anlegen.</p>
-  </section>
-</main>
+<main id="main"></main>
 
 <!-- Dialog: Neue Anfrage -->
 <dialog id="dlg-new">
@@ -101,7 +31,7 @@
   <p class="muted">E-Mail, RFQ-Text oder Freitext einfügen — und/oder Dateien anhängen
   (PDF, Bilder, TXT/CSV).</p>
   <input id="new-email" type="email" placeholder="Kunden-E-Mail (optional)">
-  <textarea id="new-text" rows="12" placeholder="Anfrage hier einfügen…"></textarea>
+  <textarea id="new-text" rows="10" placeholder="Anfrage hier einfügen…"></textarea>
   <input id="new-files" type="file" multiple
          accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.txt,.csv,.md">
   <div class="actions">

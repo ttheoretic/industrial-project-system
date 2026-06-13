@@ -165,6 +165,108 @@ class StatusUpdate(BaseModel):
     status: OfferStatus
 
 
+PipelineStage = Literal[
+    "draft", "internal_review", "sent", "viewed", "negotiation", "won", "lost"
+]
+ProjectStatus = Literal["planned", "in_progress", "waiting", "completed", "delivered"]
+
+
+class PipelineUpdate(BaseModel):
+    stage: PipelineStage
+
+
+class ActivityCreate(BaseModel):
+    body: str
+    kind: str = "note"
+
+
+class CompanyCreate(BaseModel):
+    name: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    industry: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class ContactCreate(BaseModel):
+    name: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    role: Optional[str] = None
+
+
+class ProjectUpdate(BaseModel):
+    status: Optional[ProjectStatus] = None
+    responsible: Optional[str] = None
+    deadline: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class TaskCreate(BaseModel):
+    title: str
+    assignee: Optional[str] = None
+    planned_hours: float = 0
+    is_milestone: bool = False
+    due_date: Optional[str] = None
+
+
+class TaskUpdate(BaseModel):
+    title: Optional[str] = None
+    status: Optional[Literal["open", "in_progress", "done"]] = None
+    assignee: Optional[str] = None
+    planned_hours: Optional[float] = None
+    due_date: Optional[str] = None
+
+
+class MaterialCreate(BaseModel):
+    name: str
+    spec: Optional[str] = None
+    quantity: float = 1
+    unit: str = "Stk"
+    supplier: Optional[str] = None
+    unit_cost: float = 0
+    status: Literal["needed", "ordered", "received"] = "needed"
+
+
+class MaterialUpdate(BaseModel):
+    name: Optional[str] = None
+    spec: Optional[str] = None
+    quantity: Optional[float] = None
+    unit: Optional[str] = None
+    supplier: Optional[str] = None
+    unit_cost: Optional[float] = None
+    status: Optional[Literal["needed", "ordered", "received"]] = None
+
+
+class MachineCreate(BaseModel):
+    name: str
+    work_center: Optional[str] = None
+    capacity_hours_per_week: float = 40
+
+
+class SlotCreate(BaseModel):
+    machine_id: int
+    project_id: Optional[int] = None
+    title: str
+    start_date: str
+    end_date: str
+    hours: float = 0
+
+
+class TimeEntryCreate(BaseModel):
+    employee: str
+    hours: float
+    task_id: Optional[int] = None
+    hourly_rate: Optional[float] = None
+    entry_date: str
+    note: Optional[str] = None
+
+
+class CopilotQuery(BaseModel):
+    question: str
+
+
 class OfferRecord(BaseModel):
     id: int
     status: OfferStatus

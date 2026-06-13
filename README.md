@@ -1,8 +1,45 @@
-# Industrielles Angebotssystem (MVP)
+# KI-Betriebssystem für Fertigungsunternehmen
 
-KI-gestütztes Angebotssystem für industrielle Fertigungsunternehmen (CNC-Zerspanung,
-Sondermaschinenbau, Automatisierung). Wandelt unstrukturierte Kundenanfragen in
-strukturierte, prüfbare und versandfertige Angebote um.
+Ein KI-gestütztes Betriebssystem für industrielle Fertigung (CNC-Zerspanung,
+Sondermaschinenbau, Automatisierung). Es deckt den kompletten Lebenszyklus in
+**einem** System ab — von der Kundenanfrage bis zur Nachkalkulation:
+
+```
+Anfrage → KI-Analyse → Kalkulation → Angebot → Follow-up → Auftrag gewonnen
+→ Projekt → Produktionsplanung → Materialplanung → Ausführung → Zeiterfassung
+→ Lieferung → Nachkalkulation → Analytics
+```
+
+Der Angebots-Workflow (siehe unten) ist die Grundlage; darauf bauen zwölf Module auf.
+
+## Module
+
+| # | Modul | Funktion |
+|---|---|---|
+| – | **Angebote** (Kern) | Anfrage (E-Mail/manuell, inkl. Dateien) → KI-Analyse → Kalkulation → Risiko → Prüfung → Angebotsdokument |
+| 1 | **CRM** | Firmen, Kontakte, Kundenhistorie, Timeline, Notizen; Angebote/Projekte je Kunde verknüpft |
+| 2 | **Sales-Pipeline** | Kanban über Angebotsstatus (Entwurf → Prüfung → Versendet → Angesehen → Verhandlung → Gewonnen/Verloren), Deal-Werte, Aktivitäten |
+| 3 | **Follow-up-Assistent** | KI erkennt Nachfass-Anlässe (>7 Tage keine Reaktion, baldiger Ablauf, Verhandlung) und entwirft Mails — **Versand nur nach menschlicher Freigabe** |
+| 4 | **Auftragswandlung** | „Gewonnen" erzeugt automatisch Projekt + Aufgaben + Materialbedarf aus der Angebotsanalyse — keine Doppelerfassung |
+| 5 | **Projektmanagement** | Status, Aufgaben, Meilensteine, Notizen, Verantwortliche |
+| 6 | **Materialplanung** | Materiallisten, Lieferanten, Status, Beschaffungsvorschläge |
+| 7 | **Produktionsplanung** | Maschinen, Arbeitszentren, Kapazität, Einplanung, Auslastung (Sichtbarkeit, kein ERP-Ersatz) |
+| 8 | **Zeiterfassung** | Stunden je Projekt/Aufgabe, Soll vs. Ist |
+| 9 | **Nachkalkulation** | Soll (Angebot) vs. Ist (Zeit + Material): Material-, Arbeits-, Margenabweichung |
+| 10 | **Dokumente** | Zentrale Ablage (Zeichnungen, PDFs, Angebote), Suche, Versionierung, kunden-/projektbezogen |
+| 11 | **KI-Copilot** | Globaler Assistent — beantwortet Fragen **nur aus echten Datensätzen** (Tool-Use), jede Antwort belegbar, keine Halluzination |
+| 12 | **Analytics-Dashboard** | Vertrieb (Umsatz, Abschlussquote), Betrieb (aktive/verspätete Projekte, Maschinenauslastung), Profitabilität je Kunde |
+
+### KI-Sicherheit
+Die KI erfindet keine Kosten, Materialien oder Spezifikationen: Die Preisberechnung
+ist deterministischer Code, Annahmen werden ausdrücklich mit Konfidenz markiert, und
+der Copilot ist über read-only Abfrage-Werkzeuge strikt an reale Datensätze gebunden
+(jede Antwort verweist auf die genutzten Datenquellen). Bei geringer Konfidenz wird
+zur Prüfung aufgefordert.
+
+---
+
+## Angebots-Kern (Grundlage)
 
 **Pipeline:** Anfrage (E-Mail oder manuell, inkl. Dateien) → strukturiertes Verständnis →
 Kalkulation → Risikoanalyse → menschliche Prüfung → Angebot → Versand
