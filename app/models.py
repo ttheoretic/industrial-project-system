@@ -172,7 +172,9 @@ ProjectStatus = Literal["planned", "in_progress", "waiting", "completed", "deliv
 
 
 class PipelineUpdate(BaseModel):
-    stage: PipelineStage
+    # Bewusst als freier String: der Endpoint normalisiert Schlüssel UND deutsche
+    # Labels (robust gegen veraltete/zwischengespeicherte Frontends).
+    stage: str
 
 
 class ActivityCreate(BaseModel):

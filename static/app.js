@@ -91,7 +91,7 @@ views.offers = async (offerId) => {
       ${mailState.configured ? '<button id="mail-check" class="sm">📧 E-Mails abrufen</button>' : ""}</h2>
     <div class="card"><table>
       <thead><tr><th>#</th><th>Kunde</th><th>Quelle</th><th>Status</th><th>Pipeline</th>
-        <th class="num">Wert</th><th class="num">Risiko</th></tr></thead>
+        <th class="num">Wert</th><th class="num">Risiko</th><th></th></tr></thead>
       <tbody>${offers.map((o) => `<tr class="clickable" data-id="${o.id}">
         <td>${o.id}</td>
         <td>${esc(o.analysis.customer_name || o.email_from || "—")}</td>
@@ -100,10 +100,16 @@ views.offers = async (offerId) => {
         <td><span class="badge ${o.pipeline_stage}">${STAGE_LABELS[o.pipeline_stage]}</span></td>
         <td class="num">${eur(o.final_price ?? o.costing.recommended_price)}</td>
         <td class="num"><span class="sev sev-${o.risks.overall_severity}">${o.risks.overall_severity}</span></td>
-      </tr>`).join("") || "<tr><td colspan='7' class='muted'>Noch keine Angebote</td></tr>"}</tbody>
+        <td><button class="sm danger del-offer" data-id="${o.id}">Löschen</button></td>
+      </tr>`).join("") || "<tr><td colspan='8' class='muted'>Noch keine Angebote</td></tr>"}</tbody>
     </table></div>`;
   main.querySelectorAll("tr[data-id]").forEach((tr) =>
-    tr.onclick = () => setView("offers", Number(tr.dataset.id)));
+    tr.onclick = (e) => { if (!e.target.classList.contains("del-offer")) setView("offers", Number(tr.dataset.id)); });
+  main.querySelectorAll(".del-offer").forEach((b) => b.onclick = (e) => {
+    e.stopPropagation();
+    if (!confirm(`Angebot #${b.dataset.id} wirklich löschen?`)) return;
+    busy(b, async () => { await api(`/api/offers/${b.dataset.id}`, { method: "DELETE" }); setView("offers"); });
+  });
   const mc = $("#mail-check");
   if (mc) mc.onclick = async () => {
     mc.disabled = true; mc.textContent = "Rufe ab…";

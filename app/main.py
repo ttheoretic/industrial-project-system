@@ -293,14 +293,46 @@ def get_pipeline() -> dict:
 @app.post("/api/offers/{offer_id}/pipeline")
 def set_pipeline_stage(offer_id: int, payload: PipelineUpdate) -> dict:
     offer = _get_offer_or_404(offer_id)
-    database.update_offer(offer_id, pipeline_stage=payload.stage)
-    database.add_activity("offer", offer_id, f"Pipeline-Status → {payload.stage}", kind="status")
-    if payload.stage == "won":
+    stage = _normalize_stage(payload.stage)
+    if stage is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unbekannter Pipeline-Status '{payload.stage}'. "
+            f"Erlaubt: {', '.join(services.PIPELINE_STAGES)}.",
+        )
+    database.update_offer(offer_id, pipeline_stage=stage)
+    database.add_activity("offer", offer_id, f"Pipeline-Status → {stage}", kind="status")
+    if stage == "won":
         project = services.convert_offer_to_project(offer_id)
         return {"offer": database.get_offer(offer_id), "project": project}
-    if payload.stage == "lost":
+    if stage == "lost":
         database.update_offer(offer_id, status="rejected")
     return {"offer": database.get_offer(offer_id)}
+
+
+# Normalisiert Pipeline-Werte: akzeptiert Schlüssel und deutsche Labels,
+# unabhängig von Groß-/Kleinschreibung und Leerzeichen.
+_STAGE_ALIASES = {
+    "entwurf": "draft", "interne prüfung": "internal_review",
+    "interne pruefung": "internal_review", "versendet": "sent",
+    "angesehen": "viewed", "verhandlung": "negotiation",
+    "gewonnen": "won", "auftrag gewonnen": "won", "verloren": "lost",
+}
+
+
+def _normalize_stage(value: str) -> Optional[str]:
+    key = (value or "").strip().lower()
+    if key in services.PIPELINE_STAGES:
+        return key
+    return _STAGE_ALIASES.get(key)
+
+
+@app.delete("/api/offers/{offer_id}")
+def delete_offer(offer_id: int) -> dict:
+    """Angebot löschen (z. B. Testdaten). Verknüpfte Projekte bleiben bestehen."""
+    _get_offer_or_404(offer_id)
+    database.delete("offers", offer_id)
+    return {"deleted": offer_id}
 
 
 @app.post("/api/offers/{offer_id}/activity")
