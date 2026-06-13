@@ -8,8 +8,8 @@
 </head>
 <body>
 <header class="topbar">
-  <h1>⚙ Fertigungs-OS <span style="font-size:.7rem;opacity:.6;font-weight:400">Build 7</span></h1>
-  <nav id="nav">
+  <h1>⚙ Fertigungs-OS <span style="font-size:.7rem;opacity:.6;font-weight:400">Build 8</span></h1>
+  <nav id="nav" class="hidden">
     <button data-view="home" class="active">Start</button>
     <button data-view="dashboard">Dashboard</button>
     <button data-view="offers">Angebote</button>
@@ -20,9 +20,14 @@
     <button data-view="production">Produktion</button>
     <button data-view="documents">Dokumente</button>
     <button data-view="copilot">Copilot</button>
-    <button data-view="settings">Einstellungen</button>
+    <button data-view="settings" data-role="admin">Einstellungen</button>
+    <button data-view="users" data-role="admin">Benutzer</button>
   </nav>
-  <button id="btn-new" class="primary">+ Neue Anfrage</button>
+  <button id="btn-new" class="primary hidden">+ Neue Anfrage</button>
+  <span id="user-area" class="hidden" style="display:flex;gap:.5rem;align-items:center;font-size:.82rem">
+    <span id="user-label"></span>
+    <button id="btn-logout" class="sm">Abmelden</button>
+  </span>
 </header>
 
 <main id="main"></main>

@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import (
     ai,
+    auth,
     config,
     copilot,
     costing,
@@ -51,12 +52,30 @@ from .models import (
 app = FastAPI(title="Fertigungs-Betriebssystem", version="0.3.0")
 
 
+SESSION_COOKIE = "session"
+_OPEN_PATHS = ("/static", "/api/auth", "/docs", "/openapi.json", "/redoc", "/favicon.ico")
+
+
 @app.middleware("http")
-async def no_cache_assets(request: Request, call_next):
-    """Verhindert, dass Browser eine veraltete Oberfläche (index.html/app.js)
-    aus dem Cache laden — bei iterativer Entwicklung sonst eine häufige Falle."""
-    response = await call_next(request)
+async def auth_and_cache(request: Request, call_next):
+    """Erzwingt Login + Rollenrechte für /api (außer /api/auth) und setzt
+    No-Cache-Header für die Oberfläche."""
     path = request.url.path
+    user = auth.user_for_token(request.cookies.get(SESSION_COOKIE))
+    request.state.user = user
+
+    needs_auth = path.startswith("/api") and not path.startswith("/api/auth")
+    if needs_auth and not path.startswith(_OPEN_PATHS):
+        if user is None:
+            return JSONResponse(status_code=401, content={"detail": "Nicht angemeldet"})
+        if not auth.authorize(user["role"], request.method, path):
+            return JSONResponse(
+                status_code=403,
+                content={"detail": "Keine Berechtigung für diese Aktion "
+                         f"(Rolle: {auth.ROLE_LABELS.get(user['role'], user['role'])})."},
+            )
+
+    response = await call_next(request)
     if path == "/" or path.startswith("/static"):
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     return response
@@ -97,6 +116,98 @@ def startup() -> None:
     database.init_db()
     settings_store.seed_material_prices_if_empty()
     email_intake.start_background_polling()
+
+
+# ===========================================================================
+# Authentifizierung & Benutzerverwaltung
+# ===========================================================================
+
+
+@app.get("/api/auth/status")
+def auth_status(request: Request) -> dict:
+    """Für die Oberfläche: Gibt es schon Benutzer? Bin ich angemeldet?"""
+    return {
+        "users_exist": auth.count_users() > 0,
+        "authenticated": request.state.user is not None,
+        "user": request.state.user,
+        "roles": auth.ROLE_LABELS,
+    }
+
+
+@app.post("/api/auth/bootstrap")
+async def auth_bootstrap(request: Request) -> dict:
+    """Ersten Administrator anlegen — funktioniert nur, solange es keine Benutzer gibt."""
+    if auth.count_users() > 0:
+        raise HTTPException(status_code=409, detail="Es existieren bereits Benutzer")
+    body = await request.json()
+    email, name, password = body.get("email"), body.get("name"), body.get("password")
+    if not (email and name and password):
+        raise HTTPException(status_code=400, detail="Name, E-Mail und Passwort erforderlich")
+    if len(password) < 8:
+        raise HTTPException(status_code=400, detail="Passwort muss mindestens 8 Zeichen haben")
+    user = auth.create_user(email, name, password, role="admin")
+    token = auth.login(email, password)
+    resp = JSONResponse({"user": user})
+    resp.set_cookie(SESSION_COOKIE, token, httponly=True, samesite="lax",
+                    max_age=auth.SESSION_TTL_DAYS * 86400)
+    return resp
+
+
+@app.post("/api/auth/login")
+async def auth_login(request: Request) -> dict:
+    body = await request.json()
+    token = auth.login(body.get("email", ""), body.get("password", ""))
+    if not token:
+        raise HTTPException(status_code=401, detail="E-Mail oder Passwort falsch")
+    user = auth.user_for_token(token)
+    resp = JSONResponse({"user": user})
+    resp.set_cookie(SESSION_COOKIE, token, httponly=True, samesite="lax",
+                    max_age=auth.SESSION_TTL_DAYS * 86400)
+    return resp
+
+
+@app.post("/api/auth/logout")
+def auth_logout(request: Request) -> dict:
+    auth.logout(request.cookies.get(SESSION_COOKIE))
+    resp = JSONResponse({"ok": True})
+    resp.delete_cookie(SESSION_COOKIE)
+    return resp
+
+
+@app.get("/api/users")
+def list_users() -> list[dict]:
+    return auth.list_users()
+
+
+@app.post("/api/users")
+async def create_user(request: Request) -> dict:
+    body = await request.json()
+    try:
+        return auth.create_user(
+            body.get("email", ""), body.get("name", ""),
+            body.get("password", ""), body.get("role", "viewer"),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.put("/api/users/{user_id}")
+async def update_user(user_id: int, request: Request) -> dict:
+    _get_or_404("users", user_id, "Benutzer")
+    body = await request.json()
+    # Letzten aktiven Admin nicht versehentlich entrechten/deaktivieren
+    target = database.fetch_one("users", user_id)
+    admins = [u for u in auth.list_users() if u["role"] == "admin" and u["active"]]
+    demoting = (body.get("role") and body["role"] != "admin") or (body.get("active") is False)
+    if target["role"] == "admin" and len(admins) <= 1 and demoting:
+        raise HTTPException(status_code=409, detail="Der letzte Administrator kann nicht entfernt werden")
+    try:
+        return auth.update_user(
+            user_id, name=body.get("name"), role=body.get("role"),
+            active=body.get("active"), password=body.get("password"),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 def _get_offer_or_404(offer_id: int) -> dict:

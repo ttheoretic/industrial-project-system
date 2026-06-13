@@ -61,6 +61,24 @@ Kalkulation → Risikoanalyse → menschliche Prüfung → Angebot → Versand
 Die KI *interpretiert* nur (Mengen, Materialien, Zeitschätzungen, Komplexität);
 die Preisberechnung selbst läuft im Code — nachvollziehbar und reproduzierbar.
 
+## Login & Benutzerrollen
+
+Die Anwendung ist mit eingebauter Authentifizierung geschützt (serverseitige
+Sitzungen, PBKDF2-Passwort-Hashing — kein externer Dienst, offline-/desktop-tauglich).
+
+- **Erststart:** Solange kein Benutzer existiert, zeigt die App eine Ersteinrichtung
+  und legt das **Administrator-Konto** an.
+- **Rollen:**
+  - **Administrator** — alles, inkl. Einstellungen/Stammdaten und Benutzerverwaltung
+  - **Vertrieb** — Angebote, Pipeline, CRM, Follow-up, Dokumente, Copilot
+  - **Fertigung** — Projekte, Produktion, Zeiterfassung, Material, Dokumente
+  - **Nur Lesen** — sieht alles, kann nichts ändern
+- Rechte werden **serverseitig** erzwungen (nicht nur in der Oberfläche). Die
+  Benutzerverwaltung liegt unter **Benutzer** (nur für Administratoren sichtbar).
+
+> Hinweis Produktivbetrieb: Hinter HTTPS betreiben und in `app/main.py` beim
+> Session-Cookie `secure=True` setzen.
+
 ## Startseite & Stammdaten
 
 Beim Öffnen landest du auf der **Startseite**: Überblick über alle Module plus ein

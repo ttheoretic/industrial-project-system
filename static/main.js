@@ -20,6 +20,11 @@ const fmtDate = (s) => s ? new Date(s).toLocaleDateString("de-DE") : "—";
 
 async function api(path, opts = {}) {
   const res = await fetch(path, opts);
+  if (res.status === 401 && !path.startsWith("/api/auth")) {
+    // Sitzung abgelaufen → zurück zum Login
+    if (typeof showLogin === "function") showLogin("Sitzung abgelaufen. Bitte erneut anmelden.");
+    throw new Error("Nicht angemeldet");
+  }
   if (!res.ok) {
     let detail = res.statusText;
     try { detail = (await res.json()).detail || detail; } catch {}
@@ -763,4 +768,131 @@ $("#btn-analyze").onclick = async (e) => {
   } finally { e.target.disabled = false; }
 };
 
-setView("home");
+/* ============================================================
+   Benutzerverwaltung (nur Admin)
+   ============================================================ */
+const ROLE_LABELS = { admin: "Administrator", vertrieb: "Vertrieb", fertigung: "Fertigung", viewer: "Nur Lesen" };
+
+views.users = async () => {
+  const users = await api("/api/users");
+  main.innerHTML = `<h2 class="view-title">Benutzerverwaltung</h2>
+    <div class="ai-note">Rollen: <strong>Administrator</strong> (alles inkl. Einstellungen &
+    Benutzer), <strong>Vertrieb</strong> (Angebote, Pipeline, CRM, Follow-up),
+    <strong>Fertigung</strong> (Projekte, Produktion, Zeit, Material),
+    <strong>Nur Lesen</strong> (keine Änderungen).</div>
+    <div class="card"><table>
+      <thead><tr><th>Name</th><th>E-Mail</th><th>Rolle</th><th>Status</th><th></th></tr></thead>
+      <tbody>${users.map((u) => `<tr>
+        <td>${esc(u.name)}</td><td>${esc(u.email)}</td>
+        <td><select class="u-role" data-id="${u.id}">${Object.entries(ROLE_LABELS).map(([k, v]) =>
+          `<option value="${k}" ${k === u.role ? "selected" : ""}>${v}</option>`).join("")}</select></td>
+        <td>${u.active ? "<span class='badge won'>aktiv</span>" : "<span class='badge lost'>inaktiv</span>"}</td>
+        <td class="actions">
+          <button class="sm u-active" data-id="${u.id}" data-active="${u.active ? 0 : 1}">${u.active ? "Deaktivieren" : "Aktivieren"}</button>
+          <button class="sm u-pw" data-id="${u.id}">Passwort</button>
+        </td></tr>`).join("")}</tbody></table></div>
+    <div class="card"><h3>Neuen Benutzer anlegen</h3>
+      <div class="form-grid">
+        <label class="field">Name<input id="nu-name"></label>
+        <label class="field">E-Mail<input id="nu-email" type="email"></label>
+        <label class="field">Passwort (min. 8)<input id="nu-pw" type="password"></label>
+        <label class="field">Rolle<select id="nu-role">${Object.entries(ROLE_LABELS).map(([k, v]) =>
+          `<option value="${k}">${v}</option>`).join("")}</select></label>
+      </div>
+      <button id="nu-add" class="primary" style="margin-top:.5rem">Benutzer anlegen</button></div>`;
+
+  main.querySelectorAll(".u-role").forEach((sel) => sel.onchange = () => {
+    const role = sel.value;
+    api(`/api/users/${sel.dataset.id}`, jsonOpts("PUT", { role }))
+      .catch((e) => { alert(e.message); setView("users"); });
+  });
+  main.querySelectorAll(".u-active").forEach((b) => b.onclick = () => busy(b, async () => {
+    await api(`/api/users/${b.dataset.id}`, jsonOpts("PUT", { active: b.dataset.active === "1" }));
+    setView("users"); }));
+  main.querySelectorAll(".u-pw").forEach((b) => b.onclick = () => {
+    const pw = prompt("Neues Passwort (min. 8 Zeichen):"); if (!pw) return;
+    busy(b, async () => { await api(`/api/users/${b.dataset.id}`, jsonOpts("PUT", { password: pw }));
+      alert("Passwort geändert."); });
+  });
+  $("#nu-add").onclick = (e) => busy(e.target, async () => {
+    const payload = { name: $("#nu-name").value, email: $("#nu-email").value,
+      password: $("#nu-pw").value, role: $("#nu-role").value };
+    if (!payload.name || !payload.email || payload.password.length < 8)
+      return alert("Name, E-Mail und Passwort (min. 8 Zeichen) erforderlich.");
+    await api("/api/users", jsonOpts("POST", payload)); setView("users"); });
+};
+
+/* ============================================================
+   Login / Ersteinrichtung / App-Start
+   ============================================================ */
+let currentUser = null;
+
+function renderAuthScreen(html) {
+  $("#nav").classList.add("hidden");
+  $("#btn-new").classList.add("hidden");
+  $("#user-area").classList.add("hidden");
+  main.innerHTML = `<div class="card" style="max-width:420px;margin:3rem auto">${html}</div>`;
+}
+
+function showLogin(msg = "") {
+  renderAuthScreen(`<h2 style="margin-top:0;color:#1a3a5c">Anmelden</h2>
+    ${msg ? `<p class="muted">${esc(msg)}</p>` : ""}
+    <label class="field">E-Mail<input id="li-email" type="email"></label>
+    <label class="field" style="margin-top:.5rem">Passwort<input id="li-pw" type="password"></label>
+    <button id="li-btn" class="primary" style="margin-top:.8rem">Anmelden</button>
+    <p id="li-msg" class="muted"></p>`);
+  const submit = async () => {
+    try {
+      const r = await api("/api/auth/login", jsonOpts("POST",
+        { email: $("#li-email").value, password: $("#li-pw").value }));
+      currentUser = r.user; startApp();
+    } catch (e) { $("#li-msg").textContent = e.message; }
+  };
+  $("#li-btn").onclick = submit;
+  $("#li-pw").onkeydown = (e) => { if (e.key === "Enter") submit(); };
+}
+
+function showBootstrap() {
+  renderAuthScreen(`<h2 style="margin-top:0;color:#1a3a5c">Erste Einrichtung</h2>
+    <p class="muted">Noch keine Benutzer vorhanden. Legen Sie das Administrator-Konto an.</p>
+    <label class="field">Name<input id="bs-name"></label>
+    <label class="field" style="margin-top:.5rem">E-Mail<input id="bs-email" type="email"></label>
+    <label class="field" style="margin-top:.5rem">Passwort (min. 8 Zeichen)<input id="bs-pw" type="password"></label>
+    <button id="bs-btn" class="primary" style="margin-top:.8rem">Administrator anlegen</button>
+    <p id="bs-msg" class="muted"></p>`);
+  $("#bs-btn").onclick = async () => {
+    try {
+      const r = await api("/api/auth/bootstrap", jsonOpts("POST",
+        { name: $("#bs-name").value, email: $("#bs-email").value, password: $("#bs-pw").value }));
+      currentUser = r.user; startApp();
+    } catch (e) { $("#bs-msg").textContent = e.message; }
+  };
+}
+
+function startApp() {
+  $("#nav").classList.remove("hidden");
+  $("#btn-new").classList.remove("hidden");
+  $("#user-area").classList.remove("hidden");
+  $("#user-label").textContent = `${currentUser.name} · ${ROLE_LABELS[currentUser.role] || currentUser.role}`;
+  // Nur-Lesen darf keine neue Anfrage anlegen
+  $("#btn-new").classList.toggle("hidden", currentUser.role === "viewer");
+  // Nav nach Rolle einblenden
+  document.querySelectorAll("#nav button[data-role]").forEach((b) =>
+    b.classList.toggle("hidden", currentUser.role !== b.dataset.role));
+  setView("home");
+}
+
+$("#btn-logout").onclick = async () => {
+  await api("/api/auth/logout", { method: "POST" }).catch(() => {});
+  currentUser = null;
+  showLogin("Abgemeldet.");
+};
+
+async function init() {
+  const st = await api("/api/auth/status");
+  if (!st.users_exist) return showBootstrap();
+  if (!st.authenticated) return showLogin();
+  currentUser = st.user; startApp();
+}
+
+init();
