@@ -50,6 +50,17 @@ from .models import (
 app = FastAPI(title="Fertigungs-Betriebssystem", version="0.3.0")
 
 
+@app.middleware("http")
+async def no_cache_assets(request: Request, call_next):
+    """Verhindert, dass Browser eine veraltete Oberfläche (index.html/app.js)
+    aus dem Cache laden — bei iterativer Entwicklung sonst eine häufige Falle."""
+    response = await call_next(request)
+    path = request.url.path
+    if path == "/" or path.startswith("/static"):
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return response
+
+
 @app.exception_handler(ai.MissingApiKeyError)
 def missing_api_key_handler(request, exc: ai.MissingApiKeyError):
     return JSONResponse(status_code=503, content={"detail": str(exc)})
