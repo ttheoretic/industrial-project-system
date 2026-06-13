@@ -26,6 +26,7 @@ from . import (
     pipeline,
     renderer,
     services,
+    settings_store,
 )
 from .models import (
     ActivityCreate,
@@ -94,6 +95,7 @@ ALLOWED_TRANSITIONS = {
 @app.on_event("startup")
 def startup() -> None:
     database.init_db()
+    settings_store.seed_material_prices_if_empty()
     email_intake.start_background_polling()
 
 
@@ -231,7 +233,9 @@ def approve_offer(offer_id: int) -> dict:
     cost = CostEstimate.model_validate(offer["costing"])
     final_price = offer["final_price"] or cost.recommended_price
     narrative = ai.generate_offer_narrative(analysis, cost, final_price)
-    html_doc = renderer.render_offer_html(offer_id, narrative, analysis, cost, final_price)
+    html_doc = renderer.render_offer_html(
+        offer_id, narrative, analysis, cost, final_price, settings_store.get_settings()
+    )
     database.update_offer(
         offer_id, status="reviewed", pipeline_stage="internal_review",
         final_price=final_price, offer_html=html_doc,
@@ -673,6 +677,76 @@ def copilot_ask(payload: CopilotQuery) -> dict:
 @app.get("/api/analytics")
 def analytics() -> dict:
     return services.analytics_overview()
+
+
+# ===========================================================================
+# Stammdaten / Einstellungen (je Unternehmen unterschiedlich)
+# ===========================================================================
+
+
+@app.get("/api/settings")
+def get_settings() -> dict:
+    return settings_store.get_settings()
+
+
+@app.put("/api/settings")
+async def update_settings(request: Request) -> dict:
+    patch = await request.json()
+    if not isinstance(patch, dict):
+        raise HTTPException(status_code=400, detail="Ungültige Einstellungen")
+    return settings_store.update_settings(patch)
+
+
+@app.get("/api/material-prices")
+def list_material_prices() -> list[dict]:
+    return settings_store.list_material_prices()
+
+
+@app.post("/api/material-prices")
+async def add_material_price(request: Request) -> dict:
+    body = await request.json()
+    name = (body.get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Materialname erforderlich")
+    mid = database.insert("material_prices", name=name,
+                          eur_per_kg=float(body.get("eur_per_kg") or 0))
+    return database.fetch_one("material_prices", mid)
+
+
+@app.put("/api/material-prices/{price_id}")
+async def update_material_price(price_id: int, request: Request) -> dict:
+    body = await request.json()
+    fields = {}
+    if "name" in body:
+        fields["name"] = body["name"]
+    if "eur_per_kg" in body:
+        fields["eur_per_kg"] = float(body["eur_per_kg"])
+    if fields:
+        database.update("material_prices", price_id, **fields)
+    return database.fetch_one("material_prices", price_id)
+
+
+@app.delete("/api/material-prices/{price_id}")
+def delete_material_price(price_id: int) -> dict:
+    database.delete("material_prices", price_id)
+    return {"deleted": price_id}
+
+
+@app.get("/api/setup-status")
+def setup_status() -> dict:
+    """Für die Startseite: ist das System einsatzbereit konfiguriert?"""
+    s = settings_store.get_settings()
+    return {
+        "company_name_set": bool(s["company"].get("name")),
+        "api_key_set": bool(__import__("os").getenv("ANTHROPIC_API_KEY")),
+        "email_configured": email_intake.is_configured(),
+        "material_prices": len(settings_store.list_material_prices()),
+        "counts": {
+            "offers": len(database.fetch_all("offers")),
+            "companies": len(database.fetch_all("companies")),
+            "projects": len(database.fetch_all("projects")),
+        },
+    }
 
 
 # ===========================================================================

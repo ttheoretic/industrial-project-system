@@ -61,6 +61,32 @@ Kalkulation → Risikoanalyse → menschliche Prüfung → Angebot → Versand
 Die KI *interpretiert* nur (Mengen, Materialien, Zeitschätzungen, Komplexität);
 die Preisberechnung selbst läuft im Code — nachvollziehbar und reproduzierbar.
 
+## Startseite & Stammdaten
+
+Beim Öffnen landest du auf der **Startseite**: Überblick über alle Module plus ein
+**Einrichtungs-Check** (Firmendaten, KI-Schlüssel, E-Mail, Materialpreise).
+
+Unter **Einstellungen** pflegst du alles, was je Unternehmen unterschiedlich ist —
+diese Werte fließen direkt in Kalkulation und Angebotsdokument ein:
+- **Firmendaten/Briefkopf:** Name, Adresse, USt-IdNr., Logo (erscheint im Angebot)
+- **Pauschalen:** Stundensatz, Rüstkosten, Gemeinkosten-%, Zielmarge, Komplexitätsfaktoren
+- **Kaufmännisches:** Währung, USt-Satz, Zahlungsbedingungen, Angebotsgültigkeit, AGB-Text
+- **Materialpreisliste:** pflegbare €/kg-Tabelle (ersetzt die fest verdrahteten Defaults)
+
+## Desktop-App (.exe / .app)
+
+Die App läuft als Web-App im Browser **und** als eigenständiges Desktop-Fenster
+(gleiche Funktionalität, wie bei Notion). Desktop lokal starten:
+
+```bash
+pip install pywebview
+python desktop.py
+```
+
+Zum Erzeugen einer ausführbaren Datei siehe Kopf von `desktop.py` (PyInstaller).
+Hinweis: Eine Windows-`.exe` muss unter Windows gebaut werden, eine macOS-`.app`
+unter macOS — ein Cross-Build ist nicht möglich.
+
 ## Einrichtung
 
 ```bash

@@ -48,6 +48,157 @@ document.querySelectorAll("#nav button").forEach((b) =>
   b.onclick = () => setView(b.dataset.view));
 
 /* ============================================================
+   Startseite (Übersicht + Einrichtungsstatus)
+   ============================================================ */
+const FEATURES = [
+  ["offers", "Angebote", "Kundenanfragen (E-Mail/manuell, inkl. Dateien) per KI analysieren, kalkulieren und als Angebot freigeben."],
+  ["pipeline", "Sales-Pipeline", "Angebote durch die Phasen Entwurf → Versendet → Verhandlung → Gewonnen/Verloren steuern."],
+  ["followups", "Follow-up", "Die KI erkennt Nachfass-Anlässe und entwirft Mails — Versand nur nach Freigabe."],
+  ["crm", "CRM", "Firmen, Kontakte und die komplette Kundenhistorie an einem Ort."],
+  ["projects", "Projekte", "Aus gewonnenen Angeboten werden Projekte: Aufgaben, Material, Zeit, Nachkalkulation."],
+  ["production", "Produktion", "Maschinen, Kapazität und Einplanung — Auslastung auf einen Blick."],
+  ["documents", "Dokumente", "Zeichnungen, PDFs & Co. zentral, durchsuchbar und versioniert."],
+  ["copilot", "KI-Copilot", "Fragen zu echten Systemdaten stellen — jede Antwort ist belegbar."],
+  ["dashboard", "Dashboard", "Umsatz, Abschlussquote, verspätete Projekte und Marge je Kunde."],
+  ["settings", "Einstellungen", "Stammdaten & Pauschalen Ihres Unternehmens pflegen."],
+];
+
+views.home = async () => {
+  const st = await api("/api/setup-status").catch(() => null);
+  const checks = st ? [
+    ["Firmendaten hinterlegt", st.company_name_set, "settings"],
+    ["KI-Schlüssel aktiv", st.api_key_set, null],
+    ["E-Mail-Eingang konfiguriert", st.email_configured, null],
+    ["Materialpreise gepflegt (" + st.material_prices + ")", st.material_prices > 0, "settings"],
+  ] : [];
+  main.innerHTML = `
+    <h2 class="view-title">Willkommen im Fertigungs-Betriebssystem</h2>
+    <p class="muted" style="margin-top:-.6rem">Von der Kundenanfrage bis zur Nachkalkulation — alles in einem System.</p>
+    ${st ? `<div class="card"><h3>Einrichtung</h3>
+      <ul style="list-style:none;padding:0">${checks.map(([label, ok, view]) =>
+        `<li style="padding:.25rem 0">${ok ? "✅" : "⬜"} ${esc(label)}
+          ${!ok && view ? `<button class="sm" data-goto="${view}">einrichten</button>` : ""}</li>`).join("")}</ul>
+      <p class="muted">Bestand: ${st.counts.offers} Angebote · ${st.counts.companies} Kunden · ${st.counts.projects} Projekte</p>
+      </div>` : ""}
+    <h4>Module</h4>
+    <div class="grid-cards">${FEATURES.map(([view, title, desc]) =>
+      `<div class="card" style="cursor:pointer" data-goto="${view}">
+        <h3 style="margin-top:0">${esc(title)}</h3><p class="muted">${esc(desc)}</p></div>`).join("")}</div>`;
+  main.querySelectorAll("[data-goto]").forEach((el) =>
+    el.onclick = (e) => { e.stopPropagation(); setView(el.dataset.goto); });
+};
+
+/* ============================================================
+   Einstellungen / Stammdaten
+   ============================================================ */
+views.settings = async () => {
+  const s = await api("/api/settings");
+  const prices = await api("/api/material-prices");
+  const c = s.company, pr = s.pricing, co = s.commercial, cx = pr.complexity;
+  main.innerHTML = `
+    <h2 class="view-title">Einstellungen — Stammdaten</h2>
+    <div class="ai-note">Diese Werte sind je Unternehmen unterschiedlich. Sie fließen in
+    Kalkulation und Angebotsdokument ein. Nach dem Speichern gelten sie für neue Angebote.</div>
+    <div class="row">
+      <div class="col card">
+        <h3>Firmendaten (Briefkopf)</h3>
+        <div class="form-grid">
+          <label class="field">Firmenname<input id="c-name" value="${esc(c.name)}"></label>
+          <label class="field">E-Mail<input id="c-email" value="${esc(c.email)}"></label>
+          <label class="field">Telefon<input id="c-phone" value="${esc(c.phone)}"></label>
+          <label class="field">USt-IdNr.<input id="c-vat" value="${esc(c.vat_id)}"></label>
+          <label class="field">Website<input id="c-web" value="${esc(c.website)}"></label>
+          <label class="field" style="grid-column:1/-1">Adresse<input id="c-addr" value="${esc(c.address)}"></label>
+          <label class="field" style="grid-column:1/-1">Logo (PNG/JPG)<input id="c-logo" type="file" accept="image/*"></label>
+        </div>
+      </div>
+      <div class="col card">
+        <h3>Kalkulation (Pauschalen)</h3>
+        <div class="form-grid">
+          <label class="field">Stundensatz €/h<input id="p-rate" type="number" step="0.01" value="${pr.hourly_rate}"></label>
+          <label class="field">Rüstkosten €/Position<input id="p-setup" type="number" step="0.01" value="${pr.setup_cost}"></label>
+          <label class="field">Gemeinkosten %<input id="p-oh" type="number" step="1" value="${(pr.overhead_pct*100).toFixed(0)}"></label>
+          <label class="field">Zielmarge %<input id="p-margin" type="number" step="1" value="${(pr.target_margin_pct*100).toFixed(0)}"></label>
+        </div>
+        <h4>Komplexitätsfaktoren</h4>
+        <div class="form-grid">
+          <label class="field">gering<input id="cx-low" type="number" step="0.1" value="${cx.low}"></label>
+          <label class="field">mittel<input id="cx-medium" type="number" step="0.1" value="${cx.medium}"></label>
+          <label class="field">hoch<input id="cx-high" type="number" step="0.1" value="${cx.high}"></label>
+          <label class="field">sehr hoch<input id="cx-vhigh" type="number" step="0.1" value="${cx.very_high}"></label>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Kaufmännische Konditionen</h3>
+      <div class="form-grid">
+        <label class="field">Währung<input id="co-cur" value="${esc(co.currency)}"></label>
+        <label class="field">USt-Satz %<input id="co-vat" type="number" step="1" value="${(co.vat_rate*100).toFixed(0)}"></label>
+        <label class="field">Zahlungsbedingungen<input id="co-pay" value="${esc(co.payment_terms)}"></label>
+        <label class="field">Angebotsgültigkeit (Tage)<input id="co-valid" type="number" value="${co.validity_days}"></label>
+      </div>
+      <label class="field" style="margin-top:.5rem">AGB-/Bedingungstext (im Angebot)
+        <textarea id="co-terms" rows="3">${esc(co.terms_text)}</textarea></label>
+    </div>
+    <div class="actions" style="margin-bottom:1rem"><button id="save-settings" class="primary">Stammdaten speichern</button>
+      <span id="save-msg" class="muted"></span></div>
+
+    <div class="card">
+      <h3>Materialpreisliste (€/kg)</h3>
+      <table><thead><tr><th>Material</th><th class="num">€/kg</th><th></th></tr></thead>
+        <tbody>${prices.map((m) => `<tr>
+          <td><input class="mp-name" data-id="${m.id}" value="${esc(m.name)}"></td>
+          <td class="num"><input class="mp-rate" data-id="${m.id}" type="number" step="0.01" value="${m.eur_per_kg}" style="width:90px"></td>
+          <td><button class="sm danger mp-del" data-id="${m.id}">×</button></td></tr>`).join("")}</tbody></table>
+      <div class="actions" style="margin-top:.5rem">
+        <input id="mp-new-name" placeholder="Material" style="flex:1">
+        <input id="mp-new-rate" type="number" step="0.01" placeholder="€/kg" style="width:90px">
+        <button id="mp-add" class="sm">+ Hinzufügen</button></div>
+    </div>`;
+
+  // Logo als Data-URL einlesen
+  let logoDataUrl = null;
+  $("#c-logo").onchange = (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    const r = new FileReader(); r.onload = () => { logoDataUrl = r.result; }; r.readAsDataURL(f);
+  };
+
+  $("#save-settings").onclick = (e) => busy(e.target, async () => {
+    const patch = {
+      company: {
+        name: $("#c-name").value, email: $("#c-email").value, phone: $("#c-phone").value,
+        vat_id: $("#c-vat").value, website: $("#c-web").value, address: $("#c-addr").value,
+      },
+      pricing: {
+        hourly_rate: Number($("#p-rate").value), setup_cost: Number($("#p-setup").value),
+        overhead_pct: Number($("#p-oh").value) / 100, target_margin_pct: Number($("#p-margin").value) / 100,
+        complexity: { low: Number($("#cx-low").value), medium: Number($("#cx-medium").value),
+          high: Number($("#cx-high").value), very_high: Number($("#cx-vhigh").value) },
+      },
+      commercial: {
+        currency: $("#co-cur").value, vat_rate: Number($("#co-vat").value) / 100,
+        payment_terms: $("#co-pay").value, validity_days: Number($("#co-valid").value),
+        terms_text: $("#co-terms").value,
+      },
+    };
+    if (logoDataUrl) patch.company.logo_data_url = logoDataUrl;
+    await api("/api/settings", jsonOpts("PUT", patch));
+    $("#save-msg").textContent = "✓ Gespeichert";
+  });
+
+  main.querySelectorAll(".mp-name").forEach((inp) => inp.onchange = () =>
+    api(`/api/material-prices/${inp.dataset.id}`, jsonOpts("PUT", { name: inp.value })));
+  main.querySelectorAll(".mp-rate").forEach((inp) => inp.onchange = () =>
+    api(`/api/material-prices/${inp.dataset.id}`, jsonOpts("PUT", { eur_per_kg: Number(inp.value) })));
+  main.querySelectorAll(".mp-del").forEach((b) => b.onclick = () => busy(b, async () => {
+    await api(`/api/material-prices/${b.dataset.id}`, { method: "DELETE" }); setView("settings"); }));
+  $("#mp-add").onclick = (e) => busy(e.target, async () => {
+    const name = $("#mp-new-name").value.trim(); if (!name) return;
+    await api("/api/material-prices", jsonOpts("POST", { name, eur_per_kg: Number($("#mp-new-rate").value) }));
+    setView("settings"); });
+};
+
+/* ============================================================
    Dashboard (Analytics — Modul 12)
    ============================================================ */
 views.dashboard = async () => {
@@ -612,4 +763,4 @@ $("#btn-analyze").onclick = async (e) => {
   } finally { e.target.disabled = false; }
 };
 
-setView("dashboard");
+setView("home");

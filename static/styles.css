@@ -130,3 +130,6 @@ dialog input, dialog textarea { width: 100%; margin-bottom: .6rem; }
 .ai-note { background: #fff8e6; border: 1px solid #f0d98a; border-radius: 6px;
   padding: .5rem .7rem; font-size: .8rem; color: #7a5a00; margin-bottom: .8rem; }
 a { color: #1a5c9e; }
+
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem .8rem; }
+.form-grid .field input, .form-grid .field textarea { width: 100%; }

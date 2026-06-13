@@ -127,3 +127,35 @@ def test_followup_approval_flow():
     assert result["approved"] is True
     activity = database.fetch_one("activities", aid)
     assert json.loads(activity["meta_json"])["approved"] is True
+
+
+def test_settings_drive_costing():
+    """Geänderte Stammdaten (Stundensatz/Marge) wirken sich auf die Kalkulation aus."""
+    from app import costing, settings_store
+    from app.models import InquiryAnalysis
+
+    analysis = InquiryAnalysis.model_validate({
+        "customer_name": "X", "customer_contact": None,
+        "parts": [{"name": "T", "description": "d", "quantity": 1, "material": "Aluminum 6061",
+                   "material_is_assumption": False, "estimated_mass_kg_per_part": 1.0,
+                   "estimated_machining_hours_per_part": 10.0, "complexity": "low",
+                   "technical_requirements": [], "confidence": 90}],
+        "deadline": None, "general_requirements": [], "missing_information": [],
+        "assumptions": [], "overall_confidence": 90,
+    })
+    settings_store.seed_material_prices_if_empty()
+    settings_store.update_settings({"pricing": {"hourly_rate": 100.0, "target_margin_pct": 0.5,
+                                                "overhead_pct": 0.0, "setup_cost": 0.0,
+                                                "complexity": {"low": 1.0}}})
+    cost = costing.estimate_costs(analysis)
+    # 10 h * 100 €/h * 1.0 = 1000 € Arbeit; Material 4 €/kg * 1 kg = 4 €
+    assert cost.parts[0].labor_cost == 1000.0
+    assert cost.total_cost == 1004.0          # overhead 0
+    assert cost.recommended_price == 2008.0   # /(1-0.5)
+
+
+def test_material_price_override():
+    from app import database, settings_store
+    settings_store.seed_material_prices_if_empty()
+    database.insert("material_prices", name="Spezialstahl XZ", eur_per_kg=12.5)
+    assert settings_store.material_rate("Spezialstahl XZ") == 12.5

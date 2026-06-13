@@ -2,23 +2,34 @@
 
 material cost (lookup table) + machining time x hourly rate x complexity factor
 + per-part setup cost, then overhead percentage and target margin.
+
+Die Parameter (Stundensatz, Gemeinkosten, Marge, Rüstkosten, Komplexitätsfaktoren,
+Materialpreise) kommen aus den Unternehmens-Stammdaten (settings_store), nicht
+fest aus dem Code — so pflegt jedes Unternehmen eigene Werte.
 """
 
-from . import config
+from . import config, settings_store
 from .models import CostEstimate, InquiryAnalysis, PartCost
 
 
 def estimate_costs(analysis: InquiryAnalysis) -> CostEstimate:
+    p = settings_store.pricing()
+    hourly_rate = p.get("hourly_rate", config.HOURLY_PRODUCTION_RATE_EUR)
+    overhead_pct = p.get("overhead_pct", config.OVERHEAD_PERCENT)
+    margin = p.get("target_margin_pct", config.TARGET_MARGIN_PERCENT)
+    setup_cost_default = p.get("setup_cost", config.SETUP_COST_EUR_PER_PART_TYPE)
+    complexity_factors = p.get("complexity", config.COMPLEXITY_FACTORS)
+
     parts: list[PartCost] = []
     for part in analysis.parts:
-        rate = config.material_rate(part.material)
+        rate = settings_store.material_rate(part.material)
         material_cost = rate * part.estimated_mass_kg_per_part * part.quantity
-        complexity_factor = config.COMPLEXITY_FACTORS[part.complexity]
-        machining_hours_total = part.estimated_machining_hours_per_part * part.quantity
-        labor_cost = (
-            machining_hours_total * config.HOURLY_PRODUCTION_RATE_EUR * complexity_factor
+        complexity_factor = complexity_factors.get(
+            part.complexity, config.COMPLEXITY_FACTORS[part.complexity]
         )
-        setup_cost = config.SETUP_COST_EUR_PER_PART_TYPE
+        machining_hours_total = part.estimated_machining_hours_per_part * part.quantity
+        labor_cost = machining_hours_total * hourly_rate * complexity_factor
+        setup_cost = setup_cost_default
         parts.append(
             PartCost(
                 part_name=part.name,
@@ -35,15 +46,14 @@ def estimate_costs(analysis: InquiryAnalysis) -> CostEstimate:
         )
 
     direct_cost = sum(p.subtotal for p in parts)
-    overhead_cost = direct_cost * config.OVERHEAD_PERCENT
+    overhead_cost = direct_cost * overhead_pct
     total_cost = direct_cost + overhead_cost
-    margin = config.TARGET_MARGIN_PERCENT
     recommended_price = total_cost / (1 - margin) if margin < 1 else total_cost
 
     return CostEstimate(
         parts=parts,
         direct_cost=round(direct_cost, 2),
-        overhead_percent=config.OVERHEAD_PERCENT,
+        overhead_percent=overhead_pct,
         overhead_cost=round(overhead_cost, 2),
         total_cost=round(total_cost, 2),
         target_margin_percent=margin,

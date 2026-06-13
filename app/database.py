@@ -154,6 +154,18 @@ CREATE TABLE IF NOT EXISTS activities (
     author TEXT DEFAULT 'system',
     created_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS settings (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    data TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE TABLE IF NOT EXISTS material_prices (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    eur_per_kg REAL NOT NULL,
+    created_at TEXT
+);
 """
 
 # Spalten, die per Migration zu bestehenden offers-Tabellen ergänzt werden
